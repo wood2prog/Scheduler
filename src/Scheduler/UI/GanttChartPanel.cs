@@ -1,3 +1,4 @@
+using System.Drawing.Drawing2D;
 using Scheduler.Domain;
 
 namespace Scheduler.UI;
@@ -194,13 +195,22 @@ public sealed class GanttChartPanel : Panel
             int barWidth = Math.Max(DayWidth, (endOffset - startOffset + 1) * DayWidth);
 
             var barRect = new Rectangle(barX, y + BarMargin, barWidth, RowHeight - BarMargin * 2);
-            var color = BarPalette[Math.Abs(job.Id) % BarPalette.Length];
-            using var barBrush = new SolidBrush(color);
-            g.FillRectangle(barBrush, barRect);
+            if (job.Completed)
+            {
+                using var hatchBrush = new HatchBrush(HatchStyle.LightUpwardDiagonal, Color.Gray, Color.Gainsboro);
+                g.FillRectangle(hatchBrush, barRect);
+            }
+            else
+            {
+                var color = BarPalette[Math.Abs(job.Id) % BarPalette.Length];
+                using var barBrush = new SolidBrush(color);
+                g.FillRectangle(barBrush, barRect);
+            }
             g.DrawRectangle(Pens.White, barRect.X, barRect.Y, barRect.Width - 1, barRect.Height - 1);
 
             var textRect = Rectangle.Inflate(barRect, -4, 0);
-            TextRenderer.DrawText(g, job.Name, Font, textRect, Color.White,
+            var textColor = job.Completed ? Color.Black : Color.White;
+            TextRenderer.DrawText(g, job.Name, Font, textRect, textColor,
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
         }
     }
