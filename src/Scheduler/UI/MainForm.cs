@@ -12,8 +12,8 @@ public sealed class MainForm : Form
     private readonly GanttChartPanel _ganttChartPanel;
     private readonly ComboBox _sortComboBox;
     private readonly TextBox _nameTextBox;
-    private readonly DateTimePicker _startDatePicker;
-    private readonly DateTimePicker _endDatePicker;
+    private readonly MonthCalendar _startCalendar;
+    private readonly MonthCalendar _endCalendar;
     private readonly Button _addButton;
     private readonly Button _deleteButton;
 
@@ -23,7 +23,7 @@ public sealed class MainForm : Form
 
         Text = "Scheduler";
         Width = 640;
-        Height = 480;
+        Height = 660;
         StartPosition = FormStartPosition.CenterScreen;
         Icon = System.Drawing.Icon.ExtractAssociatedIcon(System.Windows.Forms.Application.ExecutablePath);
 
@@ -65,8 +65,8 @@ public sealed class MainForm : Form
         _sortComboBox.SelectedIndexChanged += (_, _) => RefreshJobList();
 
         _nameTextBox = new TextBox { Width = 150, PlaceholderText = "Job name" };
-        _startDatePicker = new DateTimePicker { Width = 120 };
-        _endDatePicker = new DateTimePicker { Width = 120 };
+        _startCalendar = new MonthCalendar { MaxSelectionCount = 1 };
+        _endCalendar = new MonthCalendar { MaxSelectionCount = 1 };
         _addButton = new Button { Text = "Add Job", AutoSize = true };
         _addButton.Click += AddButton_Click;
 
@@ -85,17 +85,36 @@ public sealed class MainForm : Form
         topPanel.Controls.Add(_sortComboBox);
         topPanel.Controls.Add(new Label { Text = "Name:", AutoSize = true, Margin = new Padding(15, 8, 3, 3) });
         topPanel.Controls.Add(_nameTextBox);
-        topPanel.Controls.Add(new Label { Text = "Start:", AutoSize = true, Margin = new Padding(15, 8, 3, 3) });
-        topPanel.Controls.Add(_startDatePicker);
-        topPanel.Controls.Add(new Label { Text = "End:", AutoSize = true, Margin = new Padding(15, 8, 3, 3) });
-        topPanel.Controls.Add(_endDatePicker);
         topPanel.Controls.Add(_addButton);
         topPanel.Controls.Add(_deleteButton);
 
+        var datePanel = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            Padding = new Padding(8, 0, 8, 8)
+        };
+        datePanel.Controls.Add(BuildLabeledCalendar("Start", _startCalendar));
+        datePanel.Controls.Add(BuildLabeledCalendar("End", _endCalendar));
+
         Controls.Add(_tabControl);
+        Controls.Add(datePanel);
         Controls.Add(topPanel);
 
         Load += (_, _) => RefreshJobList();
+    }
+
+    private static Control BuildLabeledCalendar(string label, MonthCalendar calendar)
+    {
+        var container = new FlowLayoutPanel
+        {
+            FlowDirection = FlowDirection.TopDown,
+            AutoSize = true,
+            Margin = new Padding(0, 0, 15, 0)
+        };
+        container.Controls.Add(new Label { Text = label, AutoSize = true, Margin = new Padding(3, 0, 3, 3) });
+        container.Controls.Add(calendar);
+        return container;
     }
 
     private void AddButton_Click(object? sender, EventArgs e)
@@ -106,7 +125,7 @@ public sealed class MainForm : Form
             return;
         }
 
-        if (_endDatePicker.Value.Date < _startDatePicker.Value.Date)
+        if (_endCalendar.SelectionStart.Date < _startCalendar.SelectionStart.Date)
         {
             MessageBox.Show(this, "End date must be on or after the start date.", "Scheduler", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
@@ -115,8 +134,8 @@ public sealed class MainForm : Form
         _jobService.AddJob(new Job
         {
             Name = _nameTextBox.Text.Trim(),
-            StartDate = _startDatePicker.Value.Date,
-            EndDate = _endDatePicker.Value.Date
+            StartDate = _startCalendar.SelectionStart.Date,
+            EndDate = _endCalendar.SelectionStart.Date
         });
 
         _nameTextBox.Clear();
