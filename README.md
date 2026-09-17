@@ -1,4 +1,4 @@
-<img src="src/Scheduler/Assets/SchedulerIcon.png" alt="Scheduler icon" width="96" />
+<img src="docs/readme-header.png" alt="Scheduler - simple project planning for real work" />
 
 # Scheduler
 
