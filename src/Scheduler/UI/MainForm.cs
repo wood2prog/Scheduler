@@ -7,7 +7,9 @@ public sealed class MainForm : Form
 {
     private readonly JobService _jobService;
 
+    private readonly TabControl _tabControl;
     private readonly ListView _jobListView;
+    private readonly GanttChartPanel _ganttChartPanel;
     private readonly ComboBox _sortComboBox;
     private readonly TextBox _nameTextBox;
     private readonly DateTimePicker _startDatePicker;
@@ -32,6 +34,24 @@ public sealed class MainForm : Form
         _jobListView.Columns.Add("Name", 250);
         _jobListView.Columns.Add("Start Date", 150);
         _jobListView.Columns.Add("End Date", 150);
+
+        _ganttChartPanel = new GanttChartPanel
+        {
+            Dock = DockStyle.Fill
+        };
+
+        var listTabPage = new TabPage("List");
+        listTabPage.Controls.Add(_jobListView);
+
+        var calendarTabPage = new TabPage("Calendar");
+        calendarTabPage.Controls.Add(_ganttChartPanel);
+
+        _tabControl = new TabControl
+        {
+            Dock = DockStyle.Fill
+        };
+        _tabControl.TabPages.Add(listTabPage);
+        _tabControl.TabPages.Add(calendarTabPage);
 
         _sortComboBox = new ComboBox
         {
@@ -64,7 +84,7 @@ public sealed class MainForm : Form
         topPanel.Controls.Add(_endDatePicker);
         topPanel.Controls.Add(_addButton);
 
-        Controls.Add(_jobListView);
+        Controls.Add(_tabControl);
         Controls.Add(topPanel);
 
         Load += (_, _) => RefreshJobList();
@@ -108,5 +128,7 @@ public sealed class MainForm : Form
             item.SubItems.Add(job.EndDate.ToShortDateString());
             _jobListView.Items.Add(item);
         }
+
+        _ganttChartPanel.SetJobs(jobs);
     }
 }
