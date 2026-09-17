@@ -1,0 +1,13 @@
+Tech stack
+- Winforms UI
+- Application/Services
+- Domain/Core
+- Sqlite/Files/APIs
+
+Requirements
+- This app is for scheduling jobs.
+- A job will consist of a simple class that includes the job name, start date, and end date.
+- The view interface will be a simple list of the jobs with the option to order by start or end date.
+- The jobs will be stored in a simple SQLite database and will be loaded up when the app is opened.
+- The code should be ordered and written cleanly and clearly. Over structuring and abstractign should be avoided.
+- The code base should be written in a way to allow for modifications to be made easily and cleanly without having to rewrite entire chunks of the code.
