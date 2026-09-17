@@ -15,6 +15,7 @@ public sealed class MainForm : Form
     private readonly DateTimePicker _startDatePicker;
     private readonly DateTimePicker _endDatePicker;
     private readonly Button _addButton;
+    private readonly Button _deleteButton;
 
     public MainForm(JobService jobService)
     {
@@ -68,6 +69,11 @@ public sealed class MainForm : Form
         _addButton = new Button { Text = "Add Job", AutoSize = true };
         _addButton.Click += AddButton_Click;
 
+        _deleteButton = new Button { Text = "Delete Job", AutoSize = true, Enabled = false };
+        _deleteButton.Click += DeleteButton_Click;
+
+        _jobListView.SelectedIndexChanged += (_, _) => _deleteButton.Enabled = _jobListView.SelectedItems.Count > 0;
+
         var topPanel = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
@@ -83,6 +89,7 @@ public sealed class MainForm : Form
         topPanel.Controls.Add(new Label { Text = "End:", AutoSize = true, Margin = new Padding(15, 8, 3, 3) });
         topPanel.Controls.Add(_endDatePicker);
         topPanel.Controls.Add(_addButton);
+        topPanel.Controls.Add(_deleteButton);
 
         Controls.Add(_tabControl);
         Controls.Add(topPanel);
@@ -115,6 +122,25 @@ public sealed class MainForm : Form
         RefreshJobList();
     }
 
+    private void DeleteButton_Click(object? sender, EventArgs e)
+    {
+        if (_jobListView.SelectedItems.Count == 0)
+        {
+            return;
+        }
+
+        var job = (Job)_jobListView.SelectedItems[0].Tag!;
+        var confirm = MessageBox.Show(this, $"Delete job \"{job.Name}\"?", "Scheduler",
+            MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+        if (confirm != DialogResult.Yes)
+        {
+            return;
+        }
+
+        _jobService.DeleteJob(job.Id);
+        RefreshJobList();
+    }
+
     private void RefreshJobList()
     {
         var sortOrder = _sortComboBox.SelectedIndex == 1 ? JobSortOrder.EndDate : JobSortOrder.StartDate;
@@ -123,12 +149,13 @@ public sealed class MainForm : Form
         _jobListView.Items.Clear();
         foreach (var job in jobs)
         {
-            var item = new ListViewItem(job.Name);
+            var item = new ListViewItem(job.Name) { Tag = job };
             item.SubItems.Add(job.StartDate.ToShortDateString());
             item.SubItems.Add(job.EndDate.ToShortDateString());
             _jobListView.Items.Add(item);
         }
 
+        _deleteButton.Enabled = _jobListView.SelectedItems.Count > 0;
         _ganttChartPanel.SetJobs(jobs);
     }
 }

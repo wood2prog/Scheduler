@@ -71,4 +71,15 @@ public sealed class SqliteJobRepository : IJobRepository
         command.Parameters.AddWithValue("$end", job.EndDate.ToString("O"));
         command.ExecuteNonQuery();
     }
+
+    public void Delete(int id)
+    {
+        using var connection = new SqliteConnection(_connectionString);
+        connection.Open();
+
+        using var command = connection.CreateCommand();
+        command.CommandText = "DELETE FROM Jobs WHERE Id = $id";
+        command.Parameters.AddWithValue("$id", id);
+        command.ExecuteNonQuery();
+    }
 }

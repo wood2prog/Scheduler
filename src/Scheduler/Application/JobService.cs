@@ -28,4 +28,6 @@ public sealed class JobService
     }
 
     public void AddJob(Job job) => _repository.Add(job);
+
+    public void DeleteJob(int id) => _repository.Delete(id);
 }
