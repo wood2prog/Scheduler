@@ -1,3 +1,5 @@
+<img src="src/Scheduler/Assets/SchedulerIcon.png" alt="Scheduler icon" width="96" />
+
 # Scheduler
 
 A simple Windows desktop app for scheduling jobs. Each job has a name, a start date, an end date, and a completed flag. Jobs are listed in a sortable view, visualized as a Gantt chart, and persisted locally in SQLite.
