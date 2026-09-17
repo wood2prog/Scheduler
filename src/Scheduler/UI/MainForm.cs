@@ -22,10 +22,19 @@ public sealed class MainForm : Form
         _jobService = jobService;
 
         Text = "Scheduler";
-        Width = 640;
-        Height = 660;
-        StartPosition = FormStartPosition.CenterScreen;
         Icon = System.Drawing.Icon.ExtractAssociatedIcon(System.Windows.Forms.Application.ExecutablePath);
+
+        if (WindowSettings.Load() is { } savedBounds)
+        {
+            StartPosition = FormStartPosition.Manual;
+            Bounds = savedBounds;
+        }
+        else
+        {
+            Width = 640;
+            Height = 660;
+            StartPosition = FormStartPosition.CenterScreen;
+        }
 
         _jobListView = new ListView
         {
@@ -102,6 +111,12 @@ public sealed class MainForm : Form
         Controls.Add(topPanel);
 
         Load += (_, _) => RefreshJobList();
+    }
+
+    protected override void OnFormClosing(FormClosingEventArgs e)
+    {
+        base.OnFormClosing(e);
+        WindowSettings.Save(WindowState == FormWindowState.Normal ? Bounds : RestoreBounds);
     }
 
     private static Control BuildLabeledCalendar(string label, MonthCalendar calendar)
