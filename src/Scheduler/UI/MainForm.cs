@@ -25,6 +25,7 @@ public sealed class MainForm : Form
         Width = 640;
         Height = 480;
         StartPosition = FormStartPosition.CenterScreen;
+        Icon = System.Drawing.Icon.ExtractAssociatedIcon(System.Windows.Forms.Application.ExecutablePath);
 
         _jobListView = new ListView
         {
