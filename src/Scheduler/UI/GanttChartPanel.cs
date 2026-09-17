@@ -34,16 +34,34 @@ public sealed class GanttChartPanel : Panel
     private static readonly Color GridLineColor = Color.FromArgb(225, 225, 225);
     private static readonly Color RowAltColor = Color.FromArgb(250, 250, 250);
 
+    private readonly HScrollBar _hScrollBar;
+    private readonly VScrollBar _vScrollBar;
+
     private IReadOnlyList<Job> _jobs = [];
     private DateTime _rangeStart = DateTime.Today;
     private int _totalDays = 30;
 
     public GanttChartPanel()
     {
+        // A plain Panel's AutoScroll uses the OS's ScrollWindowEx to bit-shift the
+        // existing pixels on every scroll step, which physically drags the "pinned"
+        // header/name-column content along with everything else before we get a
+        // chance to repaint it, showing up as jitter/streaks. Driving scrolling
+        // manually with plain scrollbars avoids any pixel blitting: every scroll
+        // step just changes a value and triggers a normal, full, double-buffered
+        // repaint, so the pinned regions never visibly move.
         SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint, true);
-        AutoScroll = true;
         BackColor = Color.White;
-        RecalculateScrollSize();
+
+        _hScrollBar = new HScrollBar { Dock = DockStyle.Bottom, SmallChange = DayWidth };
+        _vScrollBar = new VScrollBar { Dock = DockStyle.Right, SmallChange = RowHeight };
+        _hScrollBar.ValueChanged += (_, _) => Invalidate();
+        _vScrollBar.ValueChanged += (_, _) => Invalidate();
+
+        Controls.Add(_hScrollBar);
+        Controls.Add(_vScrollBar);
+
+        UpdateScrollBars();
     }
 
     public void SetJobs(IReadOnlyList<Job> jobs)
@@ -63,15 +81,39 @@ public sealed class GanttChartPanel : Panel
             _totalDays = Math.Max(1, (latestEnd.Date - _rangeStart).Days + 2);
         }
 
-        RecalculateScrollSize();
+        UpdateScrollBars();
         Invalidate();
     }
 
-    private void RecalculateScrollSize()
+    protected override void OnResize(EventArgs e)
     {
-        AutoScrollMinSize = new Size(
-            NameColumnWidth + _totalDays * DayWidth,
-            HeaderHeight + _jobs.Count * RowHeight);
+        base.OnResize(e);
+        UpdateScrollBars();
+    }
+
+    protected override void OnMouseWheel(MouseEventArgs e)
+    {
+        base.OnMouseWheel(e);
+        var bar = ModifierKeys == Keys.Shift ? (ScrollBar)_hScrollBar : _vScrollBar;
+        int step = ModifierKeys == Keys.Shift ? DayWidth : RowHeight;
+        int maxValue = Math.Max(bar.Minimum, bar.Maximum - bar.LargeChange + 1);
+        bar.Value = Math.Clamp(bar.Value - Math.Sign(e.Delta) * step, bar.Minimum, maxValue);
+    }
+
+    private void UpdateScrollBars()
+    {
+        int contentWidth = _totalDays * DayWidth;
+        int contentHeight = _jobs.Count * RowHeight;
+        int viewportWidth = Math.Max(1, ClientSize.Width - NameColumnWidth - _vScrollBar.Width);
+        int viewportHeight = Math.Max(1, ClientSize.Height - HeaderHeight - _hScrollBar.Height);
+
+        _hScrollBar.Value = 0;
+        _hScrollBar.Maximum = Math.Max(0, contentWidth - 1);
+        _hScrollBar.LargeChange = Math.Max(1, Math.Min(viewportWidth, contentWidth));
+
+        _vScrollBar.Value = 0;
+        _vScrollBar.Maximum = Math.Max(0, contentHeight - 1);
+        _vScrollBar.LargeChange = Math.Max(1, Math.Min(viewportHeight, contentHeight));
     }
 
     // NOTE: text is drawn with TextRenderer (GDI), which does not reliably honor a
@@ -85,14 +127,13 @@ public sealed class GanttChartPanel : Panel
         var g = e.Graphics;
         g.Clear(BackColor);
 
-        var offset = AutoScrollPosition;
         int bodyLeft = NameColumnWidth;
         int bodyTop = HeaderHeight;
-        int bodyWidth = Math.Max(0, ClientSize.Width - bodyLeft);
-        int bodyHeight = Math.Max(0, ClientSize.Height - bodyTop);
+        int bodyWidth = Math.Max(0, ClientSize.Width - bodyLeft - _vScrollBar.Width);
+        int bodyHeight = Math.Max(0, ClientSize.Height - bodyTop - _hScrollBar.Height);
 
-        int dx = bodyLeft + offset.X;
-        int dy = bodyTop + offset.Y;
+        int dx = bodyLeft - _hScrollBar.Value;
+        int dy = bodyTop - _vScrollBar.Value;
 
         var state = g.Save();
         g.SetClip(new Rectangle(bodyLeft, bodyTop, bodyWidth, bodyHeight));
