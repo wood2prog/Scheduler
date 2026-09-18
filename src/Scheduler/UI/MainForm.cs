@@ -14,9 +14,11 @@ public sealed class MainForm : Form
     private readonly TextBox _nameTextBox;
     private readonly MonthCalendar _startCalendar;
     private readonly MonthCalendar _endCalendar;
-    private readonly Button _addButton;
+    private readonly Button _saveButton;
+    private readonly Button _cancelButton;
     private readonly Button _deleteButton;
     private bool _isPopulatingGrid;
+    private Job? _editingJob;
 
     public MainForm(JobService jobService)
     {
@@ -92,13 +94,16 @@ public sealed class MainForm : Form
         _nameTextBox = new TextBox { Width = 150, PlaceholderText = "Job name" };
         _startCalendar = new MonthCalendar { MaxSelectionCount = 1 };
         _endCalendar = new MonthCalendar { MaxSelectionCount = 1 };
-        _addButton = new Button { Text = "Add Job", AutoSize = true };
-        _addButton.Click += AddButton_Click;
+        _saveButton = new Button { Text = "Add Job", AutoSize = true };
+        _saveButton.Click += SaveButton_Click;
+
+        _cancelButton = new Button { Text = "Cancel", AutoSize = true, Enabled = false };
+        _cancelButton.Click += CancelButton_Click;
 
         _deleteButton = new Button { Text = "Delete Job", AutoSize = true, Enabled = false };
         _deleteButton.Click += DeleteButton_Click;
 
-        _jobGridView.SelectionChanged += (_, _) => _deleteButton.Enabled = _jobGridView.SelectedRows.Count > 0;
+        _jobGridView.SelectionChanged += JobGridView_SelectionChanged;
 
         var topPanel = new FlowLayoutPanel
         {
@@ -110,7 +115,8 @@ public sealed class MainForm : Form
         topPanel.Controls.Add(_sortComboBox);
         topPanel.Controls.Add(new Label { Text = "Name:", AutoSize = true, Margin = new Padding(15, 8, 3, 3) });
         topPanel.Controls.Add(_nameTextBox);
-        topPanel.Controls.Add(_addButton);
+        topPanel.Controls.Add(_saveButton);
+        topPanel.Controls.Add(_cancelButton);
         topPanel.Controls.Add(_deleteButton);
 
         var datePanel = new FlowLayoutPanel
@@ -148,7 +154,7 @@ public sealed class MainForm : Form
         return container;
     }
 
-    private void AddButton_Click(object? sender, EventArgs e)
+    private void SaveButton_Click(object? sender, EventArgs e)
     {
         if (string.IsNullOrWhiteSpace(_nameTextBox.Text))
         {
@@ -162,15 +168,30 @@ public sealed class MainForm : Form
             return;
         }
 
-        _jobService.AddJob(new Job
+        if (_editingJob is { } job)
         {
-            Name = _nameTextBox.Text.Trim(),
-            StartDate = _startCalendar.SelectionStart.Date,
-            EndDate = _endCalendar.SelectionStart.Date
-        });
+            job.Name = _nameTextBox.Text.Trim();
+            job.StartDate = _startCalendar.SelectionStart.Date;
+            job.EndDate = _endCalendar.SelectionStart.Date;
+            _jobService.UpdateJob(job);
+        }
+        else
+        {
+            _jobService.AddJob(new Job
+            {
+                Name = _nameTextBox.Text.Trim(),
+                StartDate = _startCalendar.SelectionStart.Date,
+                EndDate = _endCalendar.SelectionStart.Date
+            });
+        }
 
-        _nameTextBox.Clear();
+        EndEdit();
         RefreshJobList();
+    }
+
+    private void CancelButton_Click(object? sender, EventArgs e)
+    {
+        EndEdit();
     }
 
     private void DeleteButton_Click(object? sender, EventArgs e)
@@ -189,7 +210,42 @@ public sealed class MainForm : Form
         }
 
         _jobService.DeleteJob(job.Id);
+        EndEdit();
         RefreshJobList();
+    }
+
+    private void JobGridView_SelectionChanged(object? sender, EventArgs e)
+    {
+        _deleteButton.Enabled = _jobGridView.SelectedRows.Count > 0;
+
+        if (_isPopulatingGrid || _jobGridView.SelectedRows.Count == 0)
+        {
+            return;
+        }
+
+        var job = (Job)_jobGridView.SelectedRows[0].Tag!;
+        BeginEdit(job);
+    }
+
+    private void BeginEdit(Job job)
+    {
+        _editingJob = job;
+        _nameTextBox.Text = job.Name;
+        _startCalendar.SelectionStart = job.StartDate;
+        _startCalendar.SelectionEnd = job.StartDate;
+        _endCalendar.SelectionStart = job.EndDate;
+        _endCalendar.SelectionEnd = job.EndDate;
+        _saveButton.Text = "Save";
+        _cancelButton.Enabled = true;
+    }
+
+    private void EndEdit()
+    {
+        _editingJob = null;
+        _nameTextBox.Clear();
+        _saveButton.Text = "Add Job";
+        _cancelButton.Enabled = false;
+        _jobGridView.ClearSelection();
     }
 
     private void JobGridView_CellValueChanged(object? sender, DataGridViewCellEventArgs e)

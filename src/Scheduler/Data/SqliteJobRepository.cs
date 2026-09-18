@@ -99,6 +99,23 @@ public sealed class SqliteJobRepository : IJobRepository
         command.ExecuteNonQuery();
     }
 
+    public void Update(Job job)
+    {
+        using var connection = new SqliteConnection(_connectionString);
+        connection.Open();
+
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            UPDATE Jobs SET Name = $name, StartDate = $start, EndDate = $end
+            WHERE Id = $id;
+            """;
+        command.Parameters.AddWithValue("$name", job.Name);
+        command.Parameters.AddWithValue("$start", job.StartDate.ToString("O"));
+        command.Parameters.AddWithValue("$end", job.EndDate.ToString("O"));
+        command.Parameters.AddWithValue("$id", job.Id);
+        command.ExecuteNonQuery();
+    }
+
     public void Delete(int id)
     {
         using var connection = new SqliteConnection(_connectionString);

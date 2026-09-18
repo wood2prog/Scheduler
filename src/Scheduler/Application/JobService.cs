@@ -29,6 +29,8 @@ public sealed class JobService
 
     public void AddJob(Job job) => _repository.Add(job);
 
+    public void UpdateJob(Job job) => _repository.Update(job);
+
     public void DeleteJob(int id) => _repository.Delete(id);
 
     public void SetCompleted(int id, bool completed) => _repository.SetCompleted(id, completed);
