@@ -3,7 +3,7 @@
 
   <Package Name="Scheduler"
            Manufacturer="Scheduler"
-           Version="1.0.1"
+           Version="1.0.2"
            UpgradeCode="fe995b30-c489-4474-83b1-6c9407139651"
            Scope="perMachine"
            Compressed="yes">
