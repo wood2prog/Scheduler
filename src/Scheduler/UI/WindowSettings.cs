@@ -2,11 +2,13 @@ namespace Scheduler.UI;
 
 /// <summary>
 /// Persists the main window's position and size between runs as a plain
-/// "X,Y,Width,Height" line next to the executable.
+/// "X,Y,Width,Height" line in the per-user data folder (Program Files may be
+/// read-only once installed).
 /// </summary>
 internal static class WindowSettings
 {
-    private static string FilePath => Path.Combine(AppContext.BaseDirectory, "window.settings");
+    private static string FilePath => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Scheduler", "window.settings");
 
     public static Rectangle? Load()
     {
@@ -28,6 +30,9 @@ internal static class WindowSettings
         return new Rectangle(x, y, width, height);
     }
 
-    public static void Save(Rectangle bounds) =>
+    public static void Save(Rectangle bounds)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
         File.WriteAllText(FilePath, $"{bounds.X},{bounds.Y},{bounds.Width},{bounds.Height}");
+    }
 }

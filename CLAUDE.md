@@ -14,6 +14,10 @@ There is no test project yet. When adding one, prefer a class library test proje
 
 The app is Windows-only (WinForms, `net9.0-windows`) and must be built/run on Windows.
 
+### Building the installer
+
+`.\build-installer.ps1` publishes `src/Scheduler/Scheduler.csproj` as a self-contained win-x64 build, then packages it into `installer\bin\x64\Release\SchedulerSetup.msi` via the WiX project at `installer/Scheduler.Installer.wixproj`. Requires the WiX v6 global tool (`dotnet tool install --global wix`) and its UI extension (`wix extension add WixToolset.UI.wixext`). `installer/Package.wxs` is intentionally not part of `Scheduler.slnx` — it depends on publish output existing first, which doesn't fit a plain `dotnet build` of the solution, so it's built as a separate step by the script. `installer/Scheduler.Installer.wixproj` relies on the WiX SDK's default `**/*.wxs` glob, so don't add an explicit `<Compile Include="Package.wxs" />` — that duplicates the source and fails the build with "Multiple entry sections" (WIX0089).
+
 ## Architecture
 
 Single project (`src/Scheduler/Scheduler.csproj`, target `net9.0-windows`) organized into four layers by folder/namespace, per the spec in `Specs.txt`. There are no inter-project boundaries — layering is enforced by convention (namespace and one-way dependency direction), not by separate assemblies. Keep it that way; do not split into multiple projects unless the app's scope grows substantially.

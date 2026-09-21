@@ -1,0 +1,62 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+
+  <Package Name="Scheduler"
+           Manufacturer="Scheduler"
+           Version="1.0.1"
+           UpgradeCode="fe995b30-c489-4474-83b1-6c9407139651"
+           Scope="perMachine"
+           Compressed="yes">
+
+    <SummaryInformation Description="Scheduler installer" />
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Icon Id="SchedulerIcon.ico" SourceFile="..\src\Scheduler\Assets\SchedulerIcon.ico" />
+    <Property Id="ARPPRODUCTICON" Value="SchedulerIcon.ico" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="Scheduler" />
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ApplicationProgramsFolder" Name="Scheduler" />
+    </StandardDirectory>
+
+    <StandardDirectory Id="DesktopFolder" />
+
+    <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
+      <Files Include="$(var.PublishDir)**" />
+    </ComponentGroup>
+
+    <Component Id="StartMenuShortcut" Directory="ApplicationProgramsFolder" Guid="7b6e6a4e-7f0a-4a3f-9c1a-9f2d1b4a3c11">
+      <Shortcut Id="StartMenuShortcut"
+                Name="Scheduler"
+                Target="[INSTALLFOLDER]Scheduler.exe"
+                WorkingDirectory="INSTALLFOLDER"
+                Icon="SchedulerIcon.ico" />
+      <RemoveFolder Id="CleanUpStartMenuFolder" Directory="ApplicationProgramsFolder" On="uninstall" />
+      <RegistryValue Root="HKCU" Key="Software\Scheduler" Name="StartMenuShortcutInstalled" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+
+    <Component Id="DesktopShortcut" Directory="DesktopFolder" Guid="1a2f3c4d-5e6b-4a7c-8d9e-0f1a2b3c4d5e">
+      <Shortcut Id="DesktopShortcut"
+                Name="Scheduler"
+                Target="[INSTALLFOLDER]Scheduler.exe"
+                WorkingDirectory="INSTALLFOLDER"
+                Icon="SchedulerIcon.ico" />
+      <RegistryValue Root="HKCU" Key="Software\Scheduler" Name="DesktopShortcutInstalled" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+
+    <Feature Id="MainFeature" Title="Scheduler" Level="1">
+      <ComponentGroupRef Id="ProductComponents" />
+      <ComponentRef Id="StartMenuShortcut" />
+      <ComponentRef Id="DesktopShortcut" />
+    </Feature>
+
+    <WixVariable Id="WixUILicenseRtf" Value="License.rtf" />
+    <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
+
+  </Package>
+</Wix>

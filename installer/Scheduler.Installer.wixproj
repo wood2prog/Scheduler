@@ -1,0 +1,17 @@
+<Project Sdk="WixToolset.Sdk/6.0.1">
+
+  <PropertyGroup>
+    <OutputName>SchedulerSetup</OutputName>
+    <OutputType>Package</OutputType>
+    <Platform>x64</Platform>
+
+    <!-- Populated by build-installer.ps1 to point at the self-contained publish output. -->
+    <PublishDir Condition="'$(PublishDir)' == ''">..\src\Scheduler\bin\Release\net9.0-windows\win-x64\publish\</PublishDir>
+    <DefineConstants>PublishDir=$(PublishDir)</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="WixToolset.UI.wixext" Version="6.0.1" />
+  </ItemGroup>
+
+</Project>

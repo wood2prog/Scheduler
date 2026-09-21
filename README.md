@@ -33,6 +33,16 @@ On first run, the app creates a `scheduler.db` SQLite file next to the built exe
 - Click a job's bar (or name) in the chart to load it into the edit panel, where you can change its name, dates, and **Completed** flag. Click **Save** to persist the changes and update the chart, or **Cancel** to discard them. Click **Delete Job** to remove the loaded job (with a confirmation prompt).
 - The window remembers its size and position between runs.
 
+## Building a Windows installer
+
+To produce a distributable MSI installer (self-contained, bundles the .NET runtime so recipients don't need .NET installed):
+
+```
+.\build-installer.ps1
+```
+
+This publishes the app as a self-contained win-x64 build and packages it with [WiX Toolset](https://wixtoolset.org/) v6 (`dotnet tool install --global wix` if you don't have it, plus `wix extension add WixToolset.UI.wixext`). The installer is written to `installer\bin\x64\Release\SchedulerSetup.msi` and installs to Program Files with Start Menu and Desktop shortcuts.
+
 ## Project structure
 
 ```
@@ -44,6 +54,8 @@ src/Scheduler/
   UI/            MainForm (WinForms UI), GanttChartPanel (Gantt chart), WindowSettings (bounds persistence)
   Assets/        Application icon
   Program.cs     Composition root / app entry point
+installer/       WiX installer project (Scheduler.Installer.wixproj, Package.wxs)
+build-installer.ps1  Publishes + packages the MSI installer
 ```
 
 See [CLAUDE.md](CLAUDE.md) for a more detailed architecture and dependency-direction breakdown.
