@@ -7,8 +7,6 @@ public sealed class MainForm : Form
 {
     private readonly JobService _jobService;
 
-    private readonly TabControl _tabControl;
-    private readonly DataGridView _jobGridView;
     private readonly GanttChartPanel _ganttChartPanel;
     private readonly ComboBox _sortComboBox;
     private readonly TextBox _nameTextBox;
@@ -18,7 +16,6 @@ public sealed class MainForm : Form
     private readonly Button _saveButton;
     private readonly Button _cancelButton;
     private readonly Button _deleteButton;
-    private bool _isPopulatingGrid;
     private Job? _editingJob;
 
     public MainForm(JobService jobService)
@@ -40,53 +37,11 @@ public sealed class MainForm : Form
             StartPosition = FormStartPosition.CenterScreen;
         }
 
-        _jobGridView = new DataGridView
-        {
-            Dock = DockStyle.Fill,
-            AllowUserToAddRows = false,
-            AllowUserToDeleteRows = false,
-            AllowUserToResizeRows = false,
-            RowHeadersVisible = false,
-            SelectionMode = DataGridViewSelectionMode.FullRowSelect,
-            MultiSelect = false,
-            AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
-            EditMode = DataGridViewEditMode.EditOnEnter
-        };
-        _jobGridView.Columns.Add(new DataGridViewTextBoxColumn { Name = "Name", HeaderText = "Name", ReadOnly = true, FillWeight = 45 });
-        _jobGridView.Columns.Add(new DataGridViewTextBoxColumn { Name = "StartDate", HeaderText = "Start Date", ReadOnly = true, FillWeight = 20 });
-        _jobGridView.Columns.Add(new DataGridViewTextBoxColumn { Name = "EndDate", HeaderText = "End Date", ReadOnly = true, FillWeight = 20 });
-        _jobGridView.Columns.Add(new DataGridViewCheckBoxColumn { Name = "Completed", HeaderText = "Completed", FillWeight = 15 });
-        _jobGridView.CurrentCellDirtyStateChanged += (_, _) =>
-        {
-            if (_jobGridView.CurrentCell is DataGridViewCheckBoxCell)
-            {
-                _jobGridView.CommitEdit(DataGridViewDataErrorContexts.Commit);
-            }
-        };
-        _jobGridView.CellValueChanged += JobGridView_CellValueChanged;
-
         _ganttChartPanel = new GanttChartPanel
         {
             Dock = DockStyle.Fill
         };
-        _ganttChartPanel.JobClicked += job =>
-        {
-            _jobGridView.ClearSelection();
-            BeginEdit(job);
-        };
-
-        var listTabPage = new TabPage("List");
-        listTabPage.Controls.Add(_jobGridView);
-
-        var calendarTabPage = new TabPage("Calendar");
-        calendarTabPage.Controls.Add(_ganttChartPanel);
-
-        _tabControl = new TabControl
-        {
-            Dock = DockStyle.Fill
-        };
-        _tabControl.TabPages.Add(listTabPage);
-        _tabControl.TabPages.Add(calendarTabPage);
+        _ganttChartPanel.JobClicked += BeginEdit;
 
         _sortComboBox = new ComboBox
         {
@@ -109,8 +64,6 @@ public sealed class MainForm : Form
 
         _deleteButton = new Button { Text = "Delete Job", AutoSize = true, Enabled = false };
         _deleteButton.Click += DeleteButton_Click;
-
-        _jobGridView.SelectionChanged += JobGridView_SelectionChanged;
 
         var topPanel = new FlowLayoutPanel
         {
@@ -136,7 +89,7 @@ public sealed class MainForm : Form
         datePanel.Controls.Add(BuildLabeledCalendar("End", _endCalendar));
         datePanel.Controls.Add(_completedCheckBox);
 
-        Controls.Add(_tabControl);
+        Controls.Add(_ganttChartPanel);
         Controls.Add(datePanel);
         Controls.Add(topPanel);
 
@@ -206,12 +159,11 @@ public sealed class MainForm : Form
 
     private void DeleteButton_Click(object? sender, EventArgs e)
     {
-        if (_jobGridView.SelectedRows.Count == 0)
+        if (_editingJob is not { } job)
         {
             return;
         }
 
-        var job = (Job)_jobGridView.SelectedRows[0].Tag!;
         var confirm = MessageBox.Show(this, $"Delete job \"{job.Name}\"?", "Scheduler",
             MessageBoxButtons.YesNo, MessageBoxIcon.Question);
         if (confirm != DialogResult.Yes)
@@ -222,19 +174,6 @@ public sealed class MainForm : Form
         _jobService.DeleteJob(job.Id);
         EndEdit();
         RefreshJobList();
-    }
-
-    private void JobGridView_SelectionChanged(object? sender, EventArgs e)
-    {
-        _deleteButton.Enabled = _jobGridView.SelectedRows.Count > 0;
-
-        if (_isPopulatingGrid || _jobGridView.SelectedRows.Count == 0)
-        {
-            return;
-        }
-
-        var job = (Job)_jobGridView.SelectedRows[0].Tag!;
-        BeginEdit(job);
     }
 
     private void BeginEdit(Job job)
@@ -248,6 +187,7 @@ public sealed class MainForm : Form
         _completedCheckBox.Checked = job.Completed;
         _saveButton.Text = "Save";
         _cancelButton.Enabled = true;
+        _deleteButton.Enabled = true;
     }
 
     private void EndEdit()
@@ -257,27 +197,7 @@ public sealed class MainForm : Form
         _completedCheckBox.Checked = false;
         _saveButton.Text = "Add Job";
         _cancelButton.Enabled = false;
-        _jobGridView.ClearSelection();
-    }
-
-    private void JobGridView_CellValueChanged(object? sender, DataGridViewCellEventArgs e)
-    {
-        if (_isPopulatingGrid || e.RowIndex < 0 || _jobGridView.Columns[e.ColumnIndex].Name != "Completed")
-        {
-            return;
-        }
-
-        var row = _jobGridView.Rows[e.RowIndex];
-        if (row.Tag is not Job job)
-        {
-            return;
-        }
-
-        var completed = (bool)(row.Cells["Completed"].Value ?? false);
-        job.Completed = completed;
-        _jobService.SetCompleted(job.Id, completed);
-
-        _ganttChartPanel.SetJobs(_jobService.GetJobs(GetSelectedSortOrder()));
+        _deleteButton.Enabled = false;
     }
 
     private JobSortOrder GetSelectedSortOrder() => _sortComboBox.SelectedIndex switch
@@ -290,23 +210,6 @@ public sealed class MainForm : Form
     private void RefreshJobList()
     {
         var jobs = _jobService.GetJobs(GetSelectedSortOrder());
-
-        _isPopulatingGrid = true;
-        try
-        {
-            _jobGridView.Rows.Clear();
-            foreach (var job in jobs)
-            {
-                var rowIndex = _jobGridView.Rows.Add(job.Name, job.StartDate.ToShortDateString(), job.EndDate.ToShortDateString(), job.Completed);
-                _jobGridView.Rows[rowIndex].Tag = job;
-            }
-        }
-        finally
-        {
-            _isPopulatingGrid = false;
-        }
-
-        _deleteButton.Enabled = _jobGridView.SelectedRows.Count > 0;
         _ganttChartPanel.SetJobs(jobs);
     }
 }
