@@ -2,7 +2,7 @@
 
 # Scheduler
 
-A simple Windows desktop app for scheduling jobs. Each job has a name, a start date, an end date, and a completed flag. Jobs are listed in a sortable view, visualized as a Gantt chart, and persisted locally in SQLite.
+A simple Windows desktop app for scheduling jobs. Each job has a name, a start date, an end date, and a completed flag. Jobs are visualized as a sortable Gantt chart and persisted locally in SQLite.
 
 ## Tech stack
 
@@ -27,12 +27,10 @@ On first run, the app creates a `scheduler.db` SQLite file next to the built exe
 
 ## Usage
 
-- The main window has two tabs:
-  - **List** — a grid of all jobs with their start date, end date, and a **Completed** checkbox.
-  - **Calendar** — a Gantt chart with one row per job and one column per day. Each job is drawn as a colored bar spanning its start-to-end days; completed jobs render as a gray hatched bar instead. The date header and job-name column stay pinned while the grid scrolls horizontally/vertically.
-- Use the **Sort by** dropdown to order both views by start date or end date.
+- The main window shows a Gantt chart with one row per job and one column per day. Each job is drawn as a colored bar spanning its start-to-end days; completed jobs render as a gray hatched bar instead. The date header and job-name column stay pinned while the chart scrolls horizontally/vertically.
+- Use the **Sort by** dropdown to order jobs by start date, end date, or name.
 - Enter a job name, click a start day and an end day on the inline calendars, and click **Add Job** to create a new job.
-- Select a row in the List tab and click **Delete Job** to remove it (with a confirmation prompt).
+- Click a job's bar (or name) in the chart to load it into the edit panel, where you can change its name, dates, and **Completed** flag. Click **Save** to persist the changes and update the chart, or **Cancel** to discard them. Click **Delete Job** to remove the loaded job (with a confirmation prompt).
 - The window remembers its size and position between runs.
 
 ## Project structure
