@@ -5,7 +5,8 @@ namespace Scheduler.Application;
 public enum JobSortOrder
 {
     StartDate,
-    EndDate
+    EndDate,
+    Name
 }
 
 public sealed class JobService
@@ -23,6 +24,7 @@ public sealed class JobService
         return sortOrder switch
         {
             JobSortOrder.EndDate => jobs.OrderBy(j => j.EndDate).ToList(),
+            JobSortOrder.Name => jobs.OrderBy(j => j.Name).ToList(),
             _ => jobs.OrderBy(j => j.StartDate).ToList()
         };
     }

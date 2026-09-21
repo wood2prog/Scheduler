@@ -93,7 +93,7 @@ public sealed class MainForm : Form
             DropDownStyle = ComboBoxStyle.DropDownList,
             Width = 150
         };
-        _sortComboBox.Items.AddRange(["Start Date", "End Date"]);
+        _sortComboBox.Items.AddRange(["Start Date", "End Date", "Name"]);
         _sortComboBox.SelectedIndex = 0;
         _sortComboBox.SelectedIndexChanged += (_, _) => RefreshJobList();
 
@@ -277,14 +277,19 @@ public sealed class MainForm : Form
         job.Completed = completed;
         _jobService.SetCompleted(job.Id, completed);
 
-        var sortOrder = _sortComboBox.SelectedIndex == 1 ? JobSortOrder.EndDate : JobSortOrder.StartDate;
-        _ganttChartPanel.SetJobs(_jobService.GetJobs(sortOrder));
+        _ganttChartPanel.SetJobs(_jobService.GetJobs(GetSelectedSortOrder()));
     }
+
+    private JobSortOrder GetSelectedSortOrder() => _sortComboBox.SelectedIndex switch
+    {
+        1 => JobSortOrder.EndDate,
+        2 => JobSortOrder.Name,
+        _ => JobSortOrder.StartDate
+    };
 
     private void RefreshJobList()
     {
-        var sortOrder = _sortComboBox.SelectedIndex == 1 ? JobSortOrder.EndDate : JobSortOrder.StartDate;
-        var jobs = _jobService.GetJobs(sortOrder);
+        var jobs = _jobService.GetJobs(GetSelectedSortOrder());
 
         _isPopulatingGrid = true;
         try
