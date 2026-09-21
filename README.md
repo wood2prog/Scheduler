@@ -59,3 +59,7 @@ build-installer.ps1  Publishes + packages the MSI installer
 ```
 
 See [CLAUDE.md](CLAUDE.md) for a more detailed architecture and dependency-direction breakdown.
+
+## License
+
+[MIT](LICENSE)
