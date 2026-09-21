@@ -24,7 +24,7 @@ Dependency direction: `UI -> Application -> Domain`, and `Data -> Application ->
 - **Application/** (`Scheduler.Application`) — `IJobRepository.cs` (persistence abstraction) and `JobService.cs` (sorting/orchestration logic, `JobSortOrder` enum). The UI and Data layers both depend on this layer; it depends on nothing else in the app.
 - **Data/** (`Scheduler.Data`) — `SqliteJobRepository.cs`: the only SQLite-aware code. Implements `IJobRepository` using `Microsoft.Data.Sqlite` directly (no ORM). Creates the `Jobs` table on first connection if it doesn't exist (`CREATE TABLE IF NOT EXISTS`). Dates are stored as ISO 8601 strings (`DateTime.ToString("O")`).
 - **UI/** (`Scheduler.UI`) — `MainForm.cs`: a single WinForms `Form` built entirely in code (no `.Designer.cs` partial split — controls are constructed directly in the constructor). Takes a `JobService` via constructor injection.
-- **Program.cs** — the composition root. Wires up `SqliteJobRepository -> JobService -> MainForm` and starts the WinForms message loop. The SQLite file lives at `AppContext.BaseDirectory/scheduler.db` (next to the built executable).
+- **Program.cs** — the composition root. Wires up `SqliteJobRepository -> JobService -> MainForm` and starts the WinForms message loop. The SQLite file lives at `Documents/Scheduler/scheduler.db` (per-user, easy to find/back up — not next to the executable, which may be read-only once installed).
 
 **Naming gotcha:** the `Scheduler.Application` namespace collides with `System.Windows.Forms.Application`. Any code with `using Scheduler.Application;` that also needs the WinForms `Application` class (e.g. `Application.Run(...)`) must fully qualify it as `System.Windows.Forms.Application`, as done in `Program.cs`.
 

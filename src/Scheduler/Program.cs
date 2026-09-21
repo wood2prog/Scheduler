@@ -14,7 +14,9 @@ static class Program
     {
         ApplicationConfiguration.Initialize();
 
-        var databasePath = Path.Combine(AppContext.BaseDirectory, "scheduler.db");
+        var dataDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Scheduler");
+        Directory.CreateDirectory(dataDirectory);
+        var databasePath = Path.Combine(dataDirectory, "scheduler.db");
         IJobRepository repository = new SqliteJobRepository(databasePath);
         var jobService = new JobService(repository);
 
