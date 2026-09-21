@@ -68,6 +68,11 @@ public sealed class MainForm : Form
         {
             Dock = DockStyle.Fill
         };
+        _ganttChartPanel.JobClicked += job =>
+        {
+            _jobGridView.ClearSelection();
+            BeginEdit(job);
+        };
 
         var listTabPage = new TabPage("List");
         listTabPage.Controls.Add(_jobGridView);

@@ -42,6 +42,8 @@ public sealed class GanttChartPanel : Panel
     private DateTime _rangeStart = DateTime.Today;
     private int _totalDays = 30;
 
+    public event Action<Job>? JobClicked;
+
     public GanttChartPanel()
     {
         // A plain Panel's AutoScroll uses the OS's ScrollWindowEx to bit-shift the
@@ -99,6 +101,38 @@ public sealed class GanttChartPanel : Panel
         int step = ModifierKeys == Keys.Shift ? DayWidth : RowHeight;
         int maxValue = Math.Max(bar.Minimum, bar.Maximum - bar.LargeChange + 1);
         bar.Value = Math.Clamp(bar.Value - Math.Sign(e.Delta) * step, bar.Minimum, maxValue);
+    }
+
+    protected override void OnMouseClick(MouseEventArgs e)
+    {
+        base.OnMouseClick(e);
+        if (e.Button == MouseButtons.Left && GetJobAt(e.Location) is { } job)
+        {
+            JobClicked?.Invoke(job);
+        }
+    }
+
+    protected override void OnMouseMove(MouseEventArgs e)
+    {
+        base.OnMouseMove(e);
+        Cursor = GetJobAt(e.Location) is null ? Cursors.Default : Cursors.Hand;
+    }
+
+    private Job? GetJobAt(Point location)
+    {
+        int bodyTop = HeaderHeight;
+        int bodyBottom = ClientSize.Height - _hScrollBar.Height;
+        int bodyRight = ClientSize.Width - _vScrollBar.Width;
+
+        bool inNameColumn = location.X >= 0 && location.X < NameColumnWidth;
+        bool inGridBody = location.X >= NameColumnWidth && location.X < bodyRight;
+        if (location.Y < bodyTop || location.Y >= bodyBottom || (!inNameColumn && !inGridBody))
+        {
+            return null;
+        }
+
+        int rowIndex = (location.Y - bodyTop + _vScrollBar.Value) / RowHeight;
+        return rowIndex >= 0 && rowIndex < _jobs.Count ? _jobs[rowIndex] : null;
     }
 
     private void UpdateScrollBars()
