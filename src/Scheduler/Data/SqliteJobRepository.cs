@@ -106,12 +106,13 @@ public sealed class SqliteJobRepository : IJobRepository
 
         using var command = connection.CreateCommand();
         command.CommandText = """
-            UPDATE Jobs SET Name = $name, StartDate = $start, EndDate = $end
+            UPDATE Jobs SET Name = $name, StartDate = $start, EndDate = $end, Completed = $completed
             WHERE Id = $id;
             """;
         command.Parameters.AddWithValue("$name", job.Name);
         command.Parameters.AddWithValue("$start", job.StartDate.ToString("O"));
         command.Parameters.AddWithValue("$end", job.EndDate.ToString("O"));
+        command.Parameters.AddWithValue("$completed", job.Completed);
         command.Parameters.AddWithValue("$id", job.Id);
         command.ExecuteNonQuery();
     }

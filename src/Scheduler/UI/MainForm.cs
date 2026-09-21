@@ -14,6 +14,7 @@ public sealed class MainForm : Form
     private readonly TextBox _nameTextBox;
     private readonly MonthCalendar _startCalendar;
     private readonly MonthCalendar _endCalendar;
+    private readonly CheckBox _completedCheckBox;
     private readonly Button _saveButton;
     private readonly Button _cancelButton;
     private readonly Button _deleteButton;
@@ -99,6 +100,7 @@ public sealed class MainForm : Form
         _nameTextBox = new TextBox { Width = 150, PlaceholderText = "Job name" };
         _startCalendar = new MonthCalendar { MaxSelectionCount = 1 };
         _endCalendar = new MonthCalendar { MaxSelectionCount = 1 };
+        _completedCheckBox = new CheckBox { Text = "Completed", AutoSize = true, Margin = new Padding(3, 25, 3, 3) };
         _saveButton = new Button { Text = "Add Job", AutoSize = true };
         _saveButton.Click += SaveButton_Click;
 
@@ -132,6 +134,7 @@ public sealed class MainForm : Form
         };
         datePanel.Controls.Add(BuildLabeledCalendar("Start", _startCalendar));
         datePanel.Controls.Add(BuildLabeledCalendar("End", _endCalendar));
+        datePanel.Controls.Add(_completedCheckBox);
 
         Controls.Add(_tabControl);
         Controls.Add(datePanel);
@@ -178,6 +181,7 @@ public sealed class MainForm : Form
             job.Name = _nameTextBox.Text.Trim();
             job.StartDate = _startCalendar.SelectionStart.Date;
             job.EndDate = _endCalendar.SelectionStart.Date;
+            job.Completed = _completedCheckBox.Checked;
             _jobService.UpdateJob(job);
         }
         else
@@ -186,7 +190,8 @@ public sealed class MainForm : Form
             {
                 Name = _nameTextBox.Text.Trim(),
                 StartDate = _startCalendar.SelectionStart.Date,
-                EndDate = _endCalendar.SelectionStart.Date
+                EndDate = _endCalendar.SelectionStart.Date,
+                Completed = _completedCheckBox.Checked
             });
         }
 
@@ -240,6 +245,7 @@ public sealed class MainForm : Form
         _startCalendar.SelectionEnd = job.StartDate;
         _endCalendar.SelectionStart = job.EndDate;
         _endCalendar.SelectionEnd = job.EndDate;
+        _completedCheckBox.Checked = job.Completed;
         _saveButton.Text = "Save";
         _cancelButton.Enabled = true;
     }
@@ -248,6 +254,7 @@ public sealed class MainForm : Form
     {
         _editingJob = null;
         _nameTextBox.Clear();
+        _completedCheckBox.Checked = false;
         _saveButton.Text = "Add Job";
         _cancelButton.Enabled = false;
         _jobGridView.ClearSelection();
