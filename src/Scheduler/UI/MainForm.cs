@@ -12,6 +12,8 @@ public sealed class MainForm : Form
     private readonly TextBox _nameTextBox;
     private readonly MonthCalendar _startCalendar;
     private readonly MonthCalendar _endCalendar;
+    private readonly CheckBox _pinStartCheckBox;
+    private readonly CheckBox _pinEndCheckBox;
     private readonly CheckBox _completedCheckBox;
     private readonly Button _saveButton;
     private readonly Button _cancelButton;
@@ -55,7 +57,12 @@ public sealed class MainForm : Form
         _nameTextBox = new TextBox { Width = 150, PlaceholderText = "Job name" };
         _startCalendar = new MonthCalendar { MaxSelectionCount = 1 };
         _endCalendar = new MonthCalendar { MaxSelectionCount = 1 };
-        _completedCheckBox = new CheckBox { Text = "Completed", AutoSize = true, Margin = new Padding(3, 25, 3, 3) };
+        _pinStartCheckBox = new CheckBox { Text = "Pin start to today", AutoSize = true };
+        _pinStartCheckBox.CheckedChanged += (_, _) => UpdateDateControls();
+        _pinEndCheckBox = new CheckBox { Text = "Pin end to today", AutoSize = true };
+        _pinEndCheckBox.CheckedChanged += (_, _) => UpdateDateControls();
+        _completedCheckBox = new CheckBox { Text = "Completed", AutoSize = true };
+        _completedCheckBox.CheckedChanged += (_, _) => UpdateDateControls();
         _saveButton = new Button { Text = "Add Job", AutoSize = true };
         _saveButton.Click += SaveButton_Click;
 
@@ -87,7 +94,16 @@ public sealed class MainForm : Form
         };
         datePanel.Controls.Add(BuildLabeledCalendar("Start", _startCalendar));
         datePanel.Controls.Add(BuildLabeledCalendar("End", _endCalendar));
-        datePanel.Controls.Add(_completedCheckBox);
+        var optionsPanel = new FlowLayoutPanel
+        {
+            FlowDirection = FlowDirection.TopDown,
+            AutoSize = true,
+            Margin = new Padding(0, 22, 0, 0)
+        };
+        optionsPanel.Controls.Add(_pinStartCheckBox);
+        optionsPanel.Controls.Add(_pinEndCheckBox);
+        optionsPanel.Controls.Add(_completedCheckBox);
+        datePanel.Controls.Add(optionsPanel);
 
         Controls.Add(_ganttChartPanel);
         Controls.Add(datePanel);
@@ -135,6 +151,8 @@ public sealed class MainForm : Form
             job.StartDate = _startCalendar.SelectionStart.Date;
             job.EndDate = _endCalendar.SelectionStart.Date;
             job.Completed = _completedCheckBox.Checked;
+            job.PinStartToToday = _pinStartCheckBox.Checked;
+            job.PinEndToToday = _pinEndCheckBox.Checked;
             _jobService.UpdateJob(job);
         }
         else
@@ -144,7 +162,9 @@ public sealed class MainForm : Form
                 Name = _nameTextBox.Text.Trim(),
                 StartDate = _startCalendar.SelectionStart.Date,
                 EndDate = _endCalendar.SelectionStart.Date,
-                Completed = _completedCheckBox.Checked
+                Completed = _completedCheckBox.Checked,
+                PinStartToToday = _pinStartCheckBox.Checked,
+                PinEndToToday = _pinEndCheckBox.Checked
             });
         }
 
@@ -185,6 +205,9 @@ public sealed class MainForm : Form
         _endCalendar.SelectionStart = job.EndDate;
         _endCalendar.SelectionEnd = job.EndDate;
         _completedCheckBox.Checked = job.Completed;
+        _pinStartCheckBox.Checked = job.PinStartToToday;
+        _pinEndCheckBox.Checked = job.PinEndToToday;
+        UpdateDateControls();
         _saveButton.Text = "Save";
         _cancelButton.Enabled = true;
         _deleteButton.Enabled = true;
@@ -195,9 +218,39 @@ public sealed class MainForm : Form
         _editingJob = null;
         _nameTextBox.Clear();
         _completedCheckBox.Checked = false;
+        _pinStartCheckBox.Checked = false;
+        _pinEndCheckBox.Checked = false;
+        UpdateDateControls();
         _saveButton.Text = "Add Job";
         _cancelButton.Enabled = false;
         _deleteButton.Enabled = false;
+    }
+
+    // A pinned date follows today, so its calendar is snapped to today and locked. Once the job
+    // is completed the pins stop applying: the dates it has at that point are kept, and the pin
+    // checkboxes are disabled (their state is preserved in case the job is reopened).
+    private void UpdateDateControls()
+    {
+        var completed = _completedCheckBox.Checked;
+        _pinStartCheckBox.Enabled = !completed;
+        _pinEndCheckBox.Enabled = !completed;
+
+        var pinStart = _pinStartCheckBox.Checked && !completed;
+        var pinEnd = _pinEndCheckBox.Checked && !completed;
+        var today = DateTime.Today;
+
+        if (pinStart)
+        {
+            _startCalendar.SetDate(today);
+        }
+
+        if (pinEnd)
+        {
+            _endCalendar.SetDate(today);
+        }
+
+        _startCalendar.Enabled = !pinStart;
+        _endCalendar.Enabled = !pinEnd;
     }
 
     private JobSortOrder GetSelectedSortOrder() => _sortComboBox.SelectedIndex switch

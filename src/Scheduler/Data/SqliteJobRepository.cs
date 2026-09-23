@@ -27,33 +27,34 @@ public sealed class SqliteJobRepository : IJobRepository
                     Name TEXT NOT NULL,
                     StartDate TEXT NOT NULL,
                     EndDate TEXT NOT NULL,
-                    Completed INTEGER NOT NULL DEFAULT 0
+                    Completed INTEGER NOT NULL DEFAULT 0,
+                    PinStartToToday INTEGER NOT NULL DEFAULT 0,
+                    PinEndToToday INTEGER NOT NULL DEFAULT 0
                 );
                 """;
             command.ExecuteNonQuery();
         }
 
-        // Databases created before the Completed column existed need it added on.
-        var hasCompletedColumn = false;
+        // Databases created before these columns existed need them added on.
+        var existingColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         using (var command = connection.CreateCommand())
         {
             command.CommandText = "PRAGMA table_info(Jobs)";
             using var reader = command.ExecuteReader();
             while (reader.Read())
             {
-                if (string.Equals(reader.GetString(1), "Completed", StringComparison.OrdinalIgnoreCase))
-                {
-                    hasCompletedColumn = true;
-                    break;
-                }
+                existingColumns.Add(reader.GetString(1));
             }
         }
 
-        if (!hasCompletedColumn)
+        foreach (var column in new[] { "Completed", "PinStartToToday", "PinEndToToday" })
         {
-            using var command = connection.CreateCommand();
-            command.CommandText = "ALTER TABLE Jobs ADD COLUMN Completed INTEGER NOT NULL DEFAULT 0";
-            command.ExecuteNonQuery();
+            if (!existingColumns.Contains(column))
+            {
+                using var command = connection.CreateCommand();
+                command.CommandText = $"ALTER TABLE Jobs ADD COLUMN {column} INTEGER NOT NULL DEFAULT 0";
+                command.ExecuteNonQuery();
+            }
         }
     }
 
@@ -65,7 +66,7 @@ public sealed class SqliteJobRepository : IJobRepository
         connection.Open();
 
         using var command = connection.CreateCommand();
-        command.CommandText = "SELECT Id, Name, StartDate, EndDate, Completed FROM Jobs";
+        command.CommandText = "SELECT Id, Name, StartDate, EndDate, Completed, PinStartToToday, PinEndToToday FROM Jobs";
 
         using var reader = command.ExecuteReader();
         while (reader.Read())
@@ -76,7 +77,9 @@ public sealed class SqliteJobRepository : IJobRepository
                 Name = reader.GetString(1),
                 StartDate = DateTime.Parse(reader.GetString(2)),
                 EndDate = DateTime.Parse(reader.GetString(3)),
-                Completed = reader.GetBoolean(4)
+                Completed = reader.GetBoolean(4),
+                PinStartToToday = reader.GetBoolean(5),
+                PinEndToToday = reader.GetBoolean(6)
             });
         }
 
@@ -90,12 +93,15 @@ public sealed class SqliteJobRepository : IJobRepository
 
         using var command = connection.CreateCommand();
         command.CommandText = """
-            INSERT INTO Jobs (Name, StartDate, EndDate)
-            VALUES ($name, $start, $end);
+            INSERT INTO Jobs (Name, StartDate, EndDate, Completed, PinStartToToday, PinEndToToday)
+            VALUES ($name, $start, $end, $completed, $pinStart, $pinEnd);
             """;
         command.Parameters.AddWithValue("$name", job.Name);
         command.Parameters.AddWithValue("$start", job.StartDate.ToString("O"));
         command.Parameters.AddWithValue("$end", job.EndDate.ToString("O"));
+        command.Parameters.AddWithValue("$completed", job.Completed);
+        command.Parameters.AddWithValue("$pinStart", job.PinStartToToday);
+        command.Parameters.AddWithValue("$pinEnd", job.PinEndToToday);
         command.ExecuteNonQuery();
     }
 
@@ -106,13 +112,16 @@ public sealed class SqliteJobRepository : IJobRepository
 
         using var command = connection.CreateCommand();
         command.CommandText = """
-            UPDATE Jobs SET Name = $name, StartDate = $start, EndDate = $end, Completed = $completed
+            UPDATE Jobs SET Name = $name, StartDate = $start, EndDate = $end, Completed = $completed,
+                PinStartToToday = $pinStart, PinEndToToday = $pinEnd
             WHERE Id = $id;
             """;
         command.Parameters.AddWithValue("$name", job.Name);
         command.Parameters.AddWithValue("$start", job.StartDate.ToString("O"));
         command.Parameters.AddWithValue("$end", job.EndDate.ToString("O"));
         command.Parameters.AddWithValue("$completed", job.Completed);
+        command.Parameters.AddWithValue("$pinStart", job.PinStartToToday);
+        command.Parameters.AddWithValue("$pinEnd", job.PinEndToToday);
         command.Parameters.AddWithValue("$id", job.Id);
         command.ExecuteNonQuery();
     }

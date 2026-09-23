@@ -7,4 +7,6 @@ public sealed class Job
     public DateTime StartDate { get; set; }
     public DateTime EndDate { get; set; }
     public bool Completed { get; set; }
+    public bool PinStartToToday { get; set; }
+    public bool PinEndToToday { get; set; }
 }

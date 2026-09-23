@@ -31,6 +31,7 @@ On first run, the app creates a `scheduler.db` SQLite file next to the built exe
 - Use the **Sort by** dropdown to order jobs by start date, end date, or name.
 - Enter a job name, click a start day and an end day on the inline calendars, and click **Add Job** to create a new job.
 - Click a job's bar (or name) in the chart to load it into the edit panel, where you can change its name, dates, and **Completed** flag. Click **Save** to persist the changes and update the chart, or **Cancel** to discard them. Click **Delete Job** to remove the loaded job (with a confirmation prompt).
+- Check **Pin start to today** and/or **Pin end to today** to have that date follow the current day: each time the app opens, the pinned date moves to today (its calendar is locked while pinned). Once **Completed** is checked, pins stop applying and the job keeps whatever start and end dates it had at that point.
 - The window remembers its size and position between runs.
 
 ## Building a Windows installer
