@@ -60,6 +60,12 @@ public sealed class JobService
             job.EndDate = today;
         }
 
+        // An unfinished phased job is still running, so it always extends to today.
+        if (job.Phase is not null)
+        {
+            job.EndDate = today;
+        }
+
         if (job.EndDate < job.StartDate)
         {
             job.EndDate = job.StartDate;
@@ -70,6 +76,12 @@ public sealed class JobService
     // apply to completed jobs, so their stored dates are final.
     public DurationReport? GetDurationReport() =>
         DurationReport.Build(_repository.GetAll().Where(j => j.Completed));
+
+    public static JobStage GetStage(Job job) => JobPhases.GetStage(job);
+
+    public void ChangeStage(Job job, JobStage stage) => JobPhases.ChangeStage(job, stage, DateTime.Today);
+
+    public IReadOnlyList<PhaseSegment> GetSegments(Job job) => JobPhases.GetSegments(job, DateTime.Today);
 
     public void AddJob(Job job) => _repository.Add(job);
 

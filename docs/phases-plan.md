@@ -32,7 +32,7 @@ bar is split into three consecutive phases:
 ## Steps
 
 - [x] 1. Data model: Job fields, SQLite columns + migration, repository read/write.
-- [ ] 2. Application logic: change phase (stamp / clear dates), resolve a job's phase segments for a given day.
+- [x] 2. Application logic: change phase (stamp / clear dates), resolve a job's phase segments for a given day.
 - [ ] 3. Edit UI: Phase dropdown, delivery target date, editing of phase dates; convert existing jobs.
 - [ ] 4. Gantt drawing: three colored segments, delivery target marker, overdue shading.
 - [ ] 5. Gantt seam hover + drag to change a phase date.
