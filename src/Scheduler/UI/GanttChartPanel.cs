@@ -12,11 +12,11 @@ namespace Scheduler.UI;
 /// </summary>
 public sealed class GanttChartPanel : Panel
 {
-    private const int NameColumnWidth = 160;
-    private const int DayWidth = 32;
-    private const int RowHeight = 28;
-    private const int HeaderHeight = 36;
-    private const int BarMargin = 4;
+    private const int NameColumnWidth = GanttLayout.NameColumnWidth;
+    private const int DayWidth = GanttLayout.DayWidth;
+    private const int RowHeight = GanttLayout.RowHeight;
+    private const int HeaderHeight = GanttLayout.HeaderHeight;
+    private const int BarMargin = GanttLayout.BarMargin;
 
     private static readonly Color[] BarPalette =
     [
@@ -59,8 +59,6 @@ public sealed class GanttChartPanel : Panel
     /// <summary>Raised when the user drags the seam that starts <c>phase</c> to a new day.</summary>
     public event Action<Job, JobPhase, DateTime>? SeamMoved;
 
-    private const int SeamGrabWidth = 4;
-
     // A seam is the boundary between two neighbouring phase stretches of a job's bar. Min/Max
     // limit how far it can be dragged (the outer edges of the two stretches it separates).
     private sealed record SeamHit(Job Job, JobPhase Phase, DateTime Date, DateTime Min, DateTime Max);
@@ -68,6 +66,9 @@ public sealed class GanttChartPanel : Panel
     private SeamHit? _dragSeam;
     private DateTime _dragDate;
     private bool _suppressClick;
+
+    private GanttLayout Layout => new(_rangeStart, _hScrollBar.Value, _vScrollBar.Value,
+        ClientSize, _vScrollBar.Width, _hScrollBar.Height, _jobs.Count);
 
     public GanttChartPanel()
     {
@@ -219,9 +220,7 @@ public sealed class GanttChartPanel : Panel
         if (_dragSeam is { } drag)
         {
             // Snap to the nearest day boundary under the pointer.
-            int dayBoundary = (int)Math.Round((e.X - (NameColumnWidth - _hScrollBar.Value)) / (double)DayWidth);
-            var date = _rangeStart.AddDays(dayBoundary);
-            _dragDate = DateMath.Clamp(date, drag.Min, drag.Max);
+            _dragDate = DateMath.Clamp(Layout.SnapToDay(e.X), drag.Min, drag.Max);
             Invalidate();
             return;
         }
@@ -250,55 +249,24 @@ public sealed class GanttChartPanel : Panel
 
     private SeamHit? GetSeamAt(Point location)
     {
-        int bodyTop = HeaderHeight;
-        int bodyBottom = ClientSize.Height - _hScrollBar.Height;
-        int bodyRight = ClientSize.Width - _vScrollBar.Width;
-        if (location.X < NameColumnWidth || location.X >= bodyRight || location.Y < bodyTop || location.Y >= bodyBottom)
-        {
-            return null;
-        }
-
-        int rowIndex = (location.Y - bodyTop + _vScrollBar.Value) / RowHeight;
-        if (rowIndex < 0 || rowIndex >= _jobs.Count || _jobs[rowIndex].Phase is null)
+        var layout = Layout;
+        if (layout.RowAt(location, gridOnly: true) is not { } rowIndex || _jobs[rowIndex].Phase is null)
         {
             return null;
         }
 
         var job = _jobs[rowIndex];
         var segments = _segments[job.Id];
-        int dx = NameColumnWidth - _hScrollBar.Value;
-        SeamHit? best = null;
-        int bestDistance = SeamGrabWidth + 1;
-        for (int i = 0; i + 1 < segments.Count; i++)
-        {
-            var seamDate = segments[i + 1].Start;
-            int distance = Math.Abs(location.X - (dx + (seamDate - _rangeStart).Days * DayWidth));
-            if (distance < bestDistance)
-            {
-                bestDistance = distance;
-                best = new SeamHit(job, segments[i + 1].Phase, seamDate, segments[i].Start, segments[i + 1].EndExclusive);
-            }
-        }
-
-        return best;
-    }
-
-    private Job? GetJobAt(Point location)
-    {
-        int bodyTop = HeaderHeight;
-        int bodyBottom = ClientSize.Height - _hScrollBar.Height;
-        int bodyRight = ClientSize.Width - _vScrollBar.Width;
-
-        bool inNameColumn = location.X >= 0 && location.X < NameColumnWidth;
-        bool inGridBody = location.X >= NameColumnWidth && location.X < bodyRight;
-        if (location.Y < bodyTop || location.Y >= bodyBottom || (!inNameColumn && !inGridBody))
+        if (layout.NearestSeam(segments, location.X) is not { } i)
         {
             return null;
         }
 
-        int rowIndex = (location.Y - bodyTop + _vScrollBar.Value) / RowHeight;
-        return rowIndex >= 0 && rowIndex < _jobs.Count ? _jobs[rowIndex] : null;
+        return new SeamHit(job, segments[i + 1].Phase, segments[i + 1].Start, segments[i].Start, segments[i + 1].EndExclusive);
     }
+
+    private Job? GetJobAt(Point location) =>
+        Layout.RowAt(location) is { } row ? _jobs[row] : null;
 
     private void UpdateScrollBars()
     {
@@ -348,7 +316,7 @@ public sealed class GanttChartPanel : Panel
         var state = g.Save();
         g.SetClip(new Rectangle(bodyLeft, bodyTop, bodyWidth, bodyHeight));
         DrawGridAndBars(g, dx, dy);
-        DrawSeamDragGuide(g, dx, bodyTop, bodyHeight);
+        DrawSeamDragGuide(g, bodyTop, bodyHeight);
         g.Restore(state);
 
         state = g.Save();
@@ -367,14 +335,14 @@ public sealed class GanttChartPanel : Panel
     }
 
     // While a seam is being dragged, a dashed line and a date label show where it will land.
-    private void DrawSeamDragGuide(Graphics g, int dx, int bodyTop, int bodyHeight)
+    private void DrawSeamDragGuide(Graphics g, int bodyTop, int bodyHeight)
     {
         if (_dragSeam is null)
         {
             return;
         }
 
-        int x = dx + (_dragDate - _rangeStart).Days * DayWidth;
+        int x = Layout.DayToX(_dragDate);
         using var pen = new Pen(Color.FromArgb(60, 60, 60), 1.5f) { DashStyle = DashStyle.Dash };
         g.DrawLine(pen, x, bodyTop, x, bodyTop + bodyHeight);
 
