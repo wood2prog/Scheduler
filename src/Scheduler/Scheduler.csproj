@@ -8,7 +8,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationIcon>Assets\SchedulerIcon.ico</ApplicationIcon>
     <!-- Shown in the About window. Keep in step with Version in installer/Package.wxs. -->
-    <Version>1.2.2</Version>
+    <Version>1.3.0</Version>
   </PropertyGroup>
 
   <ItemGroup>
