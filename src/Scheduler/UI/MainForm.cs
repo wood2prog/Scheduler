@@ -9,6 +9,7 @@ public sealed class MainForm : Form
 
     private readonly GanttChartPanel _ganttChartPanel;
     private readonly ComboBox _sortComboBox;
+    private readonly CheckBox _hideCompletedCheckBox;
     private readonly TextBox _nameTextBox;
     private readonly MonthCalendar _startCalendar;
     private readonly MonthCalendar _endCalendar;
@@ -54,6 +55,9 @@ public sealed class MainForm : Form
         _sortComboBox.SelectedIndex = 0;
         _sortComboBox.SelectedIndexChanged += (_, _) => RefreshJobList();
 
+        _hideCompletedCheckBox = new CheckBox { Text = "Hide completed", AutoSize = true, Margin = new Padding(15, 6, 3, 3) };
+        _hideCompletedCheckBox.CheckedChanged += (_, _) => RefreshJobList();
+
         _nameTextBox = new TextBox { Width = 150, PlaceholderText = "Job name" };
         _startCalendar = new MonthCalendar { MaxSelectionCount = 1 };
         _endCalendar = new MonthCalendar { MaxSelectionCount = 1 };
@@ -80,6 +84,7 @@ public sealed class MainForm : Form
         };
         topPanel.Controls.Add(new Label { Text = "Sort by:", AutoSize = true, Margin = new Padding(3, 8, 3, 3) });
         topPanel.Controls.Add(_sortComboBox);
+        topPanel.Controls.Add(_hideCompletedCheckBox);
         topPanel.Controls.Add(new Label { Text = "Name:", AutoSize = true, Margin = new Padding(15, 8, 3, 3) });
         topPanel.Controls.Add(_nameTextBox);
         topPanel.Controls.Add(_saveButton);
@@ -262,7 +267,7 @@ public sealed class MainForm : Form
 
     private void RefreshJobList()
     {
-        var jobs = _jobService.GetJobs(GetSelectedSortOrder());
+        var jobs = _jobService.GetJobs(GetSelectedSortOrder(), includeCompleted: !_hideCompletedCheckBox.Checked);
         _ganttChartPanel.SetJobs(jobs);
     }
 }

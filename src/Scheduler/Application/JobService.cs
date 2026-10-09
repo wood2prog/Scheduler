@@ -18,9 +18,14 @@ public sealed class JobService
         _repository = repository;
     }
 
-    public IReadOnlyList<Job> GetJobs(JobSortOrder sortOrder)
+    public IReadOnlyList<Job> GetJobs(JobSortOrder sortOrder, bool includeCompleted = true)
     {
         var jobs = _repository.GetAll();
+        if (!includeCompleted)
+        {
+            jobs = jobs.Where(j => !j.Completed).ToList();
+        }
+
         var today = DateTime.Today;
         foreach (var job in jobs)
         {
