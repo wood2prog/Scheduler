@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Data.Sqlite;
 using Scheduler.Application;
 using Scheduler.Domain;
@@ -6,40 +7,65 @@ namespace Scheduler.Data;
 
 public sealed class SqliteJobRepository : IJobRepository
 {
+    private const string SelectColumns = """
+        Id, Name, StartDate, EndDate, Completed, PinStartToToday, PinEndToToday,
+        Phase, ConstructionStartDate, DeliveryStartDate, DeliveryTargetDate
+        """;
+
+    // Schema changes, in order. The database's PRAGMA user_version records how many have been
+    // applied; to change the schema, append a step here and never edit an earlier one.
+    private static readonly Action<SqliteConnection>[] Migrations =
+    [
+        CreateOrCatchUpJobsTable
+    ];
+
     private readonly string _connectionString;
 
     public SqliteJobRepository(string databasePath)
     {
         _connectionString = $"Data Source={databasePath}";
-        EnsureDatabaseCreated();
+        Migrate();
     }
 
-    private void EnsureDatabaseCreated()
+    private SqliteConnection Open()
     {
-        using var connection = new SqliteConnection(_connectionString);
+        var connection = new SqliteConnection(_connectionString);
         connection.Open();
+        return connection;
+    }
 
-        using (var command = connection.CreateCommand())
+    private void Migrate()
+    {
+        using var connection = Open();
+
+        var applied = Convert.ToInt32(ExecuteScalar(connection, "PRAGMA user_version"));
+        for (int version = applied; version < Migrations.Length; version++)
         {
-            command.CommandText = """
-                CREATE TABLE IF NOT EXISTS Jobs (
-                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    Name TEXT NOT NULL,
-                    StartDate TEXT NOT NULL,
-                    EndDate TEXT NOT NULL,
-                    Completed INTEGER NOT NULL DEFAULT 0,
-                    PinStartToToday INTEGER NOT NULL DEFAULT 0,
-                    PinEndToToday INTEGER NOT NULL DEFAULT 0,
-                    Phase TEXT NULL,
-                    ConstructionStartDate TEXT NULL,
-                    DeliveryStartDate TEXT NULL,
-                    DeliveryTargetDate TEXT NULL
-                );
-                """;
-            command.ExecuteNonQuery();
+            Migrations[version](connection);
+            Execute(connection, $"PRAGMA user_version = {version + 1}");
         }
+    }
 
-        // Databases created before these columns existed need them added on.
+    // Databases from before versioning have user_version 0 but may already have the table, with
+    // or without the columns added since, so this step is safe to run on any of them.
+    private static void CreateOrCatchUpJobsTable(SqliteConnection connection)
+    {
+        Execute(connection, """
+            CREATE TABLE IF NOT EXISTS Jobs (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                Name TEXT NOT NULL,
+                StartDate TEXT NOT NULL,
+                EndDate TEXT NOT NULL,
+                Completed INTEGER NOT NULL DEFAULT 0,
+                PinStartToToday INTEGER NOT NULL DEFAULT 0,
+                PinEndToToday INTEGER NOT NULL DEFAULT 0,
+                Phase TEXT NULL,
+                ConstructionStartDate TEXT NULL,
+                DeliveryStartDate TEXT NULL,
+                DeliveryTargetDate TEXT NULL
+            );
+            """);
+
         var existingColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         using (var command = connection.CreateCommand())
         {
@@ -66,26 +92,32 @@ public sealed class SqliteJobRepository : IJobRepository
         {
             if (!existingColumns.Contains(name))
             {
-                using var command = connection.CreateCommand();
-                command.CommandText = $"ALTER TABLE Jobs ADD COLUMN {name} {definition}";
-                command.ExecuteNonQuery();
+                Execute(connection, $"ALTER TABLE Jobs ADD COLUMN {name} {definition}");
             }
         }
+    }
+
+    private static void Execute(SqliteConnection connection, string sql)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        command.ExecuteNonQuery();
+    }
+
+    private static object? ExecuteScalar(SqliteConnection connection, string sql)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        return command.ExecuteScalar();
     }
 
     public IReadOnlyList<Job> GetAll()
     {
         var jobs = new List<Job>();
 
-        using var connection = new SqliteConnection(_connectionString);
-        connection.Open();
-
+        using var connection = Open();
         using var command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT Id, Name, StartDate, EndDate, Completed, PinStartToToday, PinEndToToday,
-                   Phase, ConstructionStartDate, DeliveryStartDate, DeliveryTargetDate
-            FROM Jobs
-            """;
+        command.CommandText = $"SELECT {SelectColumns} FROM Jobs";
 
         using var reader = command.ExecuteReader();
         while (reader.Read())
@@ -94,8 +126,8 @@ public sealed class SqliteJobRepository : IJobRepository
             {
                 Id = reader.GetInt32(0),
                 Name = reader.GetString(1),
-                StartDate = DateTime.Parse(reader.GetString(2)),
-                EndDate = DateTime.Parse(reader.GetString(3)),
+                StartDate = ParseDate(reader.GetString(2)),
+                EndDate = ParseDate(reader.GetString(3)),
                 Completed = reader.GetBoolean(4),
                 PinStartToToday = reader.GetBoolean(5),
                 PinEndToToday = reader.GetBoolean(6),
@@ -111,9 +143,7 @@ public sealed class SqliteJobRepository : IJobRepository
 
     public void Add(Job job)
     {
-        using var connection = new SqliteConnection(_connectionString);
-        connection.Open();
-
+        using var connection = Open();
         using var command = connection.CreateCommand();
         command.CommandText = """
             INSERT INTO Jobs (Name, StartDate, EndDate, Completed, PinStartToToday, PinEndToToday,
@@ -121,21 +151,13 @@ public sealed class SqliteJobRepository : IJobRepository
             VALUES ($name, $start, $end, $completed, $pinStart, $pinEnd,
                 $phase, $constructionStart, $deliveryStart, $deliveryTarget);
             """;
-        command.Parameters.AddWithValue("$name", job.Name);
-        command.Parameters.AddWithValue("$start", job.StartDate.ToString("O"));
-        command.Parameters.AddWithValue("$end", job.EndDate.ToString("O"));
-        command.Parameters.AddWithValue("$completed", job.Completed);
-        command.Parameters.AddWithValue("$pinStart", job.PinStartToToday);
-        command.Parameters.AddWithValue("$pinEnd", job.PinEndToToday);
-        AddPhaseParameters(command, job);
+        AddJobParameters(command, job);
         command.ExecuteNonQuery();
     }
 
     public void Update(Job job)
     {
-        using var connection = new SqliteConnection(_connectionString);
-        connection.Open();
-
+        using var connection = Open();
         using var command = connection.CreateCommand();
         command.CommandText = """
             UPDATE Jobs SET Name = $name, StartDate = $start, EndDate = $end, Completed = $completed,
@@ -144,38 +166,43 @@ public sealed class SqliteJobRepository : IJobRepository
                 DeliveryTargetDate = $deliveryTarget
             WHERE Id = $id;
             """;
-        command.Parameters.AddWithValue("$name", job.Name);
-        command.Parameters.AddWithValue("$start", job.StartDate.ToString("O"));
-        command.Parameters.AddWithValue("$end", job.EndDate.ToString("O"));
-        command.Parameters.AddWithValue("$completed", job.Completed);
-        command.Parameters.AddWithValue("$pinStart", job.PinStartToToday);
-        command.Parameters.AddWithValue("$pinEnd", job.PinEndToToday);
-        AddPhaseParameters(command, job);
+        AddJobParameters(command, job);
         command.Parameters.AddWithValue("$id", job.Id);
         command.ExecuteNonQuery();
     }
 
-    private static void AddPhaseParameters(SqliteCommand command, Job job)
+    public void Delete(int id)
     {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "DELETE FROM Jobs WHERE Id = $id";
+        command.Parameters.AddWithValue("$id", id);
+        command.ExecuteNonQuery();
+    }
+
+    // The parameters shared by Add and Update.
+    private static void AddJobParameters(SqliteCommand command, Job job)
+    {
+        command.Parameters.AddWithValue("$name", job.Name);
+        command.Parameters.AddWithValue("$start", FormatDate(job.StartDate));
+        command.Parameters.AddWithValue("$end", FormatDate(job.EndDate));
+        command.Parameters.AddWithValue("$completed", job.Completed);
+        command.Parameters.AddWithValue("$pinStart", job.PinStartToToday);
+        command.Parameters.AddWithValue("$pinEnd", job.PinEndToToday);
         command.Parameters.AddWithValue("$phase", job.Phase?.ToString() ?? (object)DBNull.Value);
         command.Parameters.AddWithValue("$constructionStart", ToDb(job.ConstructionStartDate));
         command.Parameters.AddWithValue("$deliveryStart", ToDb(job.DeliveryStartDate));
         command.Parameters.AddWithValue("$deliveryTarget", ToDb(job.DeliveryTargetDate));
     }
 
-    private static object ToDb(DateTime? date) => date?.ToString("O") ?? (object)DBNull.Value;
+    // Dates are stored as ISO 8601 round-trip strings, always read and written culture-independently.
+    private static string FormatDate(DateTime date) => date.ToString("O", CultureInfo.InvariantCulture);
+
+    private static DateTime ParseDate(string text) =>
+        DateTime.Parse(text, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
+
+    private static object ToDb(DateTime? date) => date is { } d ? FormatDate(d) : DBNull.Value;
 
     private static DateTime? ReadDate(SqliteDataReader reader, int ordinal) =>
-        reader.IsDBNull(ordinal) ? null : DateTime.Parse(reader.GetString(ordinal));
-
-    public void Delete(int id)
-    {
-        using var connection = new SqliteConnection(_connectionString);
-        connection.Open();
-
-        using var command = connection.CreateCommand();
-        command.CommandText = "DELETE FROM Jobs WHERE Id = $id";
-        command.Parameters.AddWithValue("$id", id);
-        command.ExecuteNonQuery();
-    }
+        reader.IsDBNull(ordinal) ? null : ParseDate(reader.GetString(ordinal));
 }

@@ -43,6 +43,15 @@ public sealed class SqliteJobRepositoryTests : IDisposable
         command.ExecuteNonQuery();
     }
 
+    private long UserVersion()
+    {
+        using var connection = new SqliteConnection($"Data Source={_path}");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "PRAGMA user_version";
+        return (long)command.ExecuteScalar()!;
+    }
+
     private List<string> ColumnNames()
     {
         using var connection = new SqliteConnection($"Data Source={_path}");
@@ -303,6 +312,36 @@ public sealed class SqliteJobRepositoryTests : IDisposable
 
         Assert.Single(NewRepository().GetAll());
         Assert.Equal(1, ColumnNames().Count(c => c == "Phase"));
+    }
+
+    [Fact]
+    public void FreshDatabase_IsStampedWithTheSchemaVersion()
+    {
+        NewRepository();
+
+        Assert.Equal(1, UserVersion());
+    }
+
+    [Fact]
+    public void UnversionedLegacyDatabase_IsStampedAfterMigrating()
+    {
+        Execute("CREATE TABLE Jobs (Id INTEGER PRIMARY KEY AUTOINCREMENT, Name TEXT NOT NULL, StartDate TEXT NOT NULL, EndDate TEXT NOT NULL);");
+
+        NewRepository();
+
+        Assert.Equal(1, UserVersion());
+        Assert.Contains("DeliveryTargetDate", ColumnNames());
+    }
+
+    [Fact]
+    public void ReopeningAVersionedDatabase_ChangesNothing()
+    {
+        NewRepository().Add(Make(name: "kept"));
+
+        var reopened = NewRepository();
+
+        Assert.Equal(1, UserVersion());
+        Assert.Equal("kept", Assert.Single(reopened.GetAll()).Name);
     }
 
     [Fact]
