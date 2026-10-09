@@ -55,6 +55,23 @@ public class JobServiceTests
         Assert.Equal(["early", "middle", "late"], names);
     }
 
+    [Theory]
+    [InlineData(JobSortOrder.StartDate)]
+    [InlineData(JobSortOrder.EndDate)]
+    [InlineData(JobSortOrder.Name)]
+    public void GetJobs_PutsProspectsLast_ByDeliveryTargetThenName(JobSortOrder order)
+    {
+        _repository.Seed(new Job { Name = "undatedB", Phase = JobPhase.Prospect, StartDate = Ago(30), EndDate = Ago(30) });
+        _repository.Seed(new Job { Name = "later", Phase = JobPhase.Prospect, DeliveryTargetDate = Ahead(20), StartDate = Ago(30), EndDate = Ago(30) });
+        _repository.Seed(new Job { Name = "undatedA", Phase = JobPhase.Prospect, StartDate = Ago(30), EndDate = Ago(30) });
+        _repository.Seed(new Job { Name = "sooner", Phase = JobPhase.Prospect, DeliveryTargetDate = Ahead(5), StartDate = Ago(30), EndDate = Ago(30) });
+        Seed("design", start: Ago(1), phase: JobPhase.Design);
+
+        var names = _service.GetJobs(order).Select(j => j.Name);
+
+        Assert.Equal(["design", "sooner", "later", "undatedA", "undatedB"], names);
+    }
+
     [Fact]
     public void GetJobs_SortsByEndDate()
     {

@@ -32,12 +32,23 @@ public sealed class JobService
             ApplyPins(job, today);
         }
 
-        return sortOrder switch
+        // Prospects have nothing on the timeline yet, so they always sit below scheduled jobs,
+        // ordered by delivery target (undated ones last), then by name.
+        var scheduled = jobs.Where(j => j.Phase != JobPhase.Prospect);
+        var prospects = jobs
+            .Where(j => j.Phase == JobPhase.Prospect)
+            .OrderBy(j => j.DeliveryTargetDate.HasValue ? 0 : 1)
+            .ThenBy(j => j.DeliveryTargetDate)
+            .ThenBy(j => j.Name, StringComparer.CurrentCultureIgnoreCase);
+
+        var sorted = sortOrder switch
         {
-            JobSortOrder.EndDate => jobs.OrderBy(j => j.EndDate).ToList(),
-            JobSortOrder.Name => jobs.OrderBy(j => j.Name).ToList(),
-            _ => jobs.OrderBy(j => j.StartDate).ToList()
+            JobSortOrder.EndDate => scheduled.OrderBy(j => j.EndDate),
+            JobSortOrder.Name => scheduled.OrderBy(j => j.Name),
+            _ => scheduled.OrderBy(j => j.StartDate)
         };
+
+        return sorted.Concat(prospects).ToList();
     }
 
     // Pinned dates track the current day until the job is completed; completing it freezes
