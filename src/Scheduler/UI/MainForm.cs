@@ -458,6 +458,6 @@ public sealed class MainForm : Form
     private void RefreshJobList()
     {
         var jobs = _jobService.GetJobs(GetSelectedSortOrder(), includeCompleted: !_hideCompletedCheckBox.Checked);
-        _ganttChartPanel.SetJobs(jobs);
+        _ganttChartPanel.SetJobs(jobs, _jobService.GetSegments);
     }
 }

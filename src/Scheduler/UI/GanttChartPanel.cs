@@ -1,4 +1,5 @@
 using System.Drawing.Drawing2D;
+using Scheduler.Application;
 using Scheduler.Domain;
 
 namespace Scheduler.UI;
@@ -29,6 +30,12 @@ public sealed class GanttChartPanel : Panel
         Color.SlateGray
     ];
 
+    private static readonly Color DesignColor = Color.RoyalBlue;
+    private static readonly Color ConstructionColor = Color.DarkOrange;
+    private static readonly Color DeliveryColor = Color.ForestGreen;
+    private static readonly Color OverdueColor = Color.Firebrick;
+    private static readonly Color TargetMarkerColor = Color.Gold;
+
     private static readonly Color HeaderBackColor = Color.FromArgb(240, 240, 240);
     private static readonly Color WeekendColor = Color.FromArgb(248, 248, 248);
     private static readonly Color TodayColor = Color.FromArgb(255, 250, 205);
@@ -39,6 +46,7 @@ public sealed class GanttChartPanel : Panel
     private readonly VScrollBar _vScrollBar;
 
     private IReadOnlyList<Job> _jobs = [];
+    private Dictionary<int, IReadOnlyList<PhaseSegment>> _segments = [];
     private DateTime _rangeStart = DateTime.Today;
     private int _totalDays = 30;
 
@@ -67,21 +75,46 @@ public sealed class GanttChartPanel : Panel
         UpdateScrollBars();
     }
 
-    public void SetJobs(IReadOnlyList<Job> jobs)
+    /// <param name="getSegments">The phase stretches of a phased job (empty for unphased jobs and Prospects).</param>
+    public void SetJobs(IReadOnlyList<Job> jobs, Func<Job, IReadOnlyList<PhaseSegment>> getSegments)
     {
         _jobs = jobs;
+        _segments = jobs.Where(j => j.Phase is not null).ToDictionary(j => j.Id, getSegments);
 
-        if (_jobs.Count == 0)
+        // The visible range covers everything drawn: plain bars, phase stretches and delivery
+        // targets. A Prospect without a target draws nothing, so it doesn't widen the range.
+        var dates = new List<DateTime>();
+        foreach (var job in _jobs)
+        {
+            if (job.Phase is null)
+            {
+                dates.Add(job.StartDate.Date);
+                dates.Add(job.EndDate.Date);
+            }
+            else
+            {
+                foreach (var segment in _segments[job.Id])
+                {
+                    dates.Add(segment.Start);
+                    dates.Add(segment.EndExclusive.AddDays(-1));
+                }
+            }
+
+            if (job.DeliveryTargetDate is { } target)
+            {
+                dates.Add(target.Date);
+            }
+        }
+
+        if (dates.Count == 0)
         {
             _rangeStart = DateTime.Today;
             _totalDays = 30;
         }
         else
         {
-            var earliestStart = _jobs.Min(j => j.StartDate.Date);
-            var latestEnd = _jobs.Max(j => j.EndDate.Date);
-            _rangeStart = earliestStart.AddDays(-1);
-            _totalDays = Math.Max(1, (latestEnd.Date - _rangeStart).Days + 2);
+            _rangeStart = dates.Min().AddDays(-1);
+            _totalDays = Math.Max(1, (dates.Max() - _rangeStart).Days + 2);
         }
 
         UpdateScrollBars();
@@ -223,31 +256,139 @@ public sealed class GanttChartPanel : Panel
             g.DrawLine(new Pen(GridLineColor), dx, y + RowHeight, dx + gridWidth, y + RowHeight);
 
             var job = _jobs[i];
-            int startOffset = (job.StartDate.Date - _rangeStart).Days;
-            int endOffset = (job.EndDate.Date - _rangeStart).Days;
-            int barX = dx + startOffset * DayWidth;
-            int barWidth = Math.Max(DayWidth, (endOffset - startOffset + 1) * DayWidth);
-
-            var barRect = new Rectangle(barX, y + BarMargin, barWidth, RowHeight - BarMargin * 2);
-            if (job.Completed)
+            if (job.Phase is null)
             {
-                using var hatchBrush = new HatchBrush(HatchStyle.LightUpwardDiagonal, Color.Gray, Color.Gainsboro);
-                g.FillRectangle(hatchBrush, barRect);
+                DrawPlainBar(g, job, dx, y);
             }
             else
             {
-                var color = BarPalette[Math.Abs(job.Id) % BarPalette.Length];
-                using var barBrush = new SolidBrush(color);
-                g.FillRectangle(barBrush, barRect);
+                DrawPhasedBar(g, job, dx, y);
             }
-            g.DrawRectangle(Pens.White, barRect.X, barRect.Y, barRect.Width - 1, barRect.Height - 1);
 
-            var textRect = Rectangle.Inflate(barRect, -4, 0);
-            var textColor = job.Completed ? Color.Black : Color.White;
-            TextRenderer.DrawText(g, job.Name, Font, textRect, textColor,
-                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
+            if (job.DeliveryTargetDate is { } target)
+            {
+                DrawTargetMarker(g, target.Date, dx, y);
+            }
         }
     }
+
+    private void DrawPlainBar(Graphics g, Job job, int dx, int y)
+    {
+        int startOffset = (job.StartDate.Date - _rangeStart).Days;
+        int endOffset = (job.EndDate.Date - _rangeStart).Days;
+        int barX = dx + startOffset * DayWidth;
+        int barWidth = Math.Max(DayWidth, (endOffset - startOffset + 1) * DayWidth);
+
+        var barRect = new Rectangle(barX, y + BarMargin, barWidth, RowHeight - BarMargin * 2);
+        if (job.Completed)
+        {
+            using var hatchBrush = new HatchBrush(HatchStyle.LightUpwardDiagonal, Color.Gray, Color.Gainsboro);
+            g.FillRectangle(hatchBrush, barRect);
+        }
+        else
+        {
+            var color = BarPalette[Math.Abs(job.Id) % BarPalette.Length];
+            using var barBrush = new SolidBrush(color);
+            g.FillRectangle(barBrush, barRect);
+        }
+        g.DrawRectangle(Pens.White, barRect.X, barRect.Y, barRect.Width - 1, barRect.Height - 1);
+
+        DrawBarText(g, job.Name, barRect, job.Completed ? Color.Black : Color.White);
+    }
+
+    // One colored stretch per phase. Finished jobs are drawn faded. The part of Delivery that
+    // runs past the delivery target is drawn in the overdue color.
+    private void DrawPhasedBar(Graphics g, Job job, int dx, int y)
+    {
+        var segments = _segments[job.Id];
+        if (segments.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var segment in segments)
+        {
+            var color = segment.Phase switch
+            {
+                JobPhase.Design => DesignColor,
+                JobPhase.Construction => ConstructionColor,
+                _ => DeliveryColor
+            };
+            if (job.Completed)
+            {
+                color = Fade(color);
+            }
+
+            var overdueStart = segment.EndExclusive;
+            if (segment.Phase == JobPhase.Delivery && job.DeliveryTargetDate is { } target)
+            {
+                overdueStart = Max(segment.Start, target.Date.AddDays(1));
+                overdueStart = overdueStart > segment.EndExclusive ? segment.EndExclusive : overdueStart;
+            }
+
+            FillSpan(g, segment.Start, overdueStart, dx, y, color);
+            FillSpan(g, overdueStart, segment.EndExclusive, dx, y, job.Completed ? Fade(OverdueColor) : OverdueColor);
+        }
+
+        var first = segments[0].Start;
+        var last = segments[^1].EndExclusive;
+        var span = SpanRect(first, last, dx, y);
+        DrawBarText(g, job.Name, span, job.Completed ? Color.Black : Color.White);
+    }
+
+    private Rectangle SpanRect(DateTime start, DateTime endExclusive, int dx, int y) =>
+        new(dx + (start - _rangeStart).Days * DayWidth, y + BarMargin,
+            (endExclusive - start).Days * DayWidth, RowHeight - BarMargin * 2);
+
+    private void FillSpan(Graphics g, DateTime start, DateTime endExclusive, int dx, int y, Color color)
+    {
+        if (endExclusive <= start)
+        {
+            return;
+        }
+
+        var rect = SpanRect(start, endExclusive, dx, y);
+        using var brush = new SolidBrush(color);
+        g.FillRectangle(brush, rect);
+        g.DrawRectangle(Pens.White, rect.X, rect.Y, rect.Width - 1, rect.Height - 1);
+    }
+
+    private void DrawBarText(Graphics g, string text, Rectangle barRect, Color color)
+    {
+        var textRect = Rectangle.Inflate(barRect, -4, 0);
+        TextRenderer.DrawText(g, text, Font, textRect, color,
+            TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
+    }
+
+    // A diamond centered on the delivery target day.
+    private void DrawTargetMarker(Graphics g, DateTime target, int dx, int y)
+    {
+        const int half = 8;
+        int cx = dx + (target - _rangeStart).Days * DayWidth + DayWidth / 2;
+        int cy = y + RowHeight / 2;
+        var diamond = new[]
+        {
+            new Point(cx, cy - half),
+            new Point(cx + half, cy),
+            new Point(cx, cy + half),
+            new Point(cx - half, cy)
+        };
+
+        var previous = g.SmoothingMode;
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        using var brush = new SolidBrush(TargetMarkerColor);
+        g.FillPolygon(brush, diamond);
+        using var pen = new Pen(Color.FromArgb(60, 60, 60), 1.5f);
+        g.DrawPolygon(pen, diamond);
+        g.SmoothingMode = previous;
+    }
+
+    private static Color Fade(Color color) => Color.FromArgb(
+        color.R + (255 - color.R) * 55 / 100,
+        color.G + (255 - color.G) * 55 / 100,
+        color.B + (255 - color.B) * 55 / 100);
+
+    private static DateTime Max(DateTime a, DateTime b) => a > b ? a : b;
 
     private void DrawHeader(Graphics g, int dx)
     {
