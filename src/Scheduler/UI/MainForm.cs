@@ -20,7 +20,20 @@ public sealed class MainForm : Form
     private readonly Button _saveButton;
     private readonly Button _cancelButton;
     private readonly Button _deleteButton;
+    private readonly ComboBox _stageComboBox;
+    private readonly Control _endCalendarContainer;
+    private readonly TableLayoutPanel _phaseDatesPanel;
+    private readonly DateTimePicker _constructionStartPicker;
+    private readonly DateTimePicker _deliveryStartPicker;
+    private readonly DateTimePicker _finishedPicker;
+    private readonly DateTimePicker _deliveryTargetPicker;
+
+    // The job being edited (null when adding). All form fields work on _draft, a copy, so that
+    // changing the phase can restamp dates and the form simply reloads from it. Saving copies
+    // the draft back to _editingJob (or adds it as a new job).
     private Job? _editingJob;
+    private Job _draft = new();
+    private bool _loading;
 
     public MainForm(JobService jobService)
     {
@@ -68,6 +81,39 @@ public sealed class MainForm : Form
         _pinEndCheckBox.CheckedChanged += (_, _) => UpdateDateControls();
         _completedCheckBox = new CheckBox { Text = "Completed", AutoSize = true };
         _completedCheckBox.CheckedChanged += (_, _) => UpdateDateControls();
+
+        _stageComboBox = new ComboBox
+        {
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            Width = 140,
+            Margin = new Padding(3, 0, 3, 8)
+        };
+        _stageComboBox.Items.AddRange(["No phases", "Prospect", "Design", "Construction", "Delivery", "Finished"]);
+        _stageComboBox.SelectedIndex = 0;
+        _stageComboBox.SelectedIndexChanged += StageComboBox_SelectedIndexChanged;
+
+        _constructionStartPicker = CreateDatePicker();
+        _deliveryStartPicker = CreateDatePicker();
+        _finishedPicker = CreateDatePicker();
+        _deliveryTargetPicker = CreateDatePicker();
+        _deliveryTargetPicker.ShowCheckBox = true;
+
+        // Stands in for the End calendar while a job uses phases.
+        _phaseDatesPanel = new TableLayoutPanel
+        {
+            AutoSize = true,
+            ColumnCount = 2,
+            Margin = new Padding(0, 0, 15, 0),
+            Visible = false
+        };
+        var phaseDatesTitle = new Label { Text = "Phase dates", AutoSize = true, Margin = new Padding(3, 0, 3, 3) };
+        _phaseDatesPanel.Controls.Add(phaseDatesTitle, 0, 0);
+        _phaseDatesPanel.SetColumnSpan(phaseDatesTitle, 2);
+        AddPhaseDateRow(1, "Construction starts", _constructionStartPicker);
+        AddPhaseDateRow(2, "Delivery starts", _deliveryStartPicker);
+        AddPhaseDateRow(3, "Finished on", _finishedPicker);
+        AddPhaseDateRow(4, "Delivery target", _deliveryTargetPicker);
+
         _saveButton = new Button { Text = "Add Job", AutoSize = true };
         _saveButton.Click += SaveButton_Click;
 
@@ -99,13 +145,17 @@ public sealed class MainForm : Form
             Padding = new Padding(8, 0, 8, 8)
         };
         datePanel.Controls.Add(BuildLabeledCalendar("Start", _startCalendar));
-        datePanel.Controls.Add(BuildLabeledCalendar("End", _endCalendar));
+        _endCalendarContainer = BuildLabeledCalendar("End", _endCalendar);
+        datePanel.Controls.Add(_endCalendarContainer);
+        datePanel.Controls.Add(_phaseDatesPanel);
         var optionsPanel = new FlowLayoutPanel
         {
             FlowDirection = FlowDirection.TopDown,
             AutoSize = true,
-            Margin = new Padding(0, 22, 0, 0)
+            Margin = new Padding(0)
         };
+        optionsPanel.Controls.Add(new Label { Text = "Phase", AutoSize = true, Margin = new Padding(3, 0, 3, 3) });
+        optionsPanel.Controls.Add(_stageComboBox);
         optionsPanel.Controls.Add(_pinStartCheckBox);
         optionsPanel.Controls.Add(_pinEndCheckBox);
         optionsPanel.Controls.Add(_completedCheckBox);
@@ -133,6 +183,8 @@ public sealed class MainForm : Form
         Controls.Add(datePanel);
         Controls.Add(topPanel);
 
+        ResetDraft();
+
         Load += (_, _) => RefreshJobList();
     }
 
@@ -155,6 +207,15 @@ public sealed class MainForm : Form
         return container;
     }
 
+    private static DateTimePicker CreateDatePicker() =>
+        new() { Format = DateTimePickerFormat.Short, Width = 110, Margin = new Padding(3, 3, 3, 6) };
+
+    private void AddPhaseDateRow(int row, string label, DateTimePicker picker)
+    {
+        _phaseDatesPanel.Controls.Add(new Label { Text = label, AutoSize = true, Margin = new Padding(3, 7, 3, 3) }, 0, row);
+        _phaseDatesPanel.Controls.Add(picker, 1, row);
+    }
+
     private void SaveButton_Click(object? sender, EventArgs e)
     {
         if (string.IsNullOrWhiteSpace(_nameTextBox.Text))
@@ -163,7 +224,10 @@ public sealed class MainForm : Form
             return;
         }
 
-        if (_endCalendar.SelectionStart.Date < _startCalendar.SelectionStart.Date)
+        ReadControlsIntoDraft();
+
+        // Phased jobs get no ordering checks: their dates can be edited freely.
+        if (_draft.Phase is null && _draft.EndDate.Date < _draft.StartDate.Date)
         {
             MessageBox.Show(this, "End date must be on or after the start date.", "Scheduler", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
@@ -171,25 +235,12 @@ public sealed class MainForm : Form
 
         if (_editingJob is { } job)
         {
-            job.Name = _nameTextBox.Text.Trim();
-            job.StartDate = _startCalendar.SelectionStart.Date;
-            job.EndDate = _endCalendar.SelectionStart.Date;
-            job.Completed = _completedCheckBox.Checked;
-            job.PinStartToToday = _pinStartCheckBox.Checked;
-            job.PinEndToToday = _pinEndCheckBox.Checked;
+            CopyJob(_draft, job);
             _jobService.UpdateJob(job);
         }
         else
         {
-            _jobService.AddJob(new Job
-            {
-                Name = _nameTextBox.Text.Trim(),
-                StartDate = _startCalendar.SelectionStart.Date,
-                EndDate = _endCalendar.SelectionStart.Date,
-                Completed = _completedCheckBox.Checked,
-                PinStartToToday = _pinStartCheckBox.Checked,
-                PinEndToToday = _pinEndCheckBox.Checked
-            });
+            _jobService.AddJob(_draft);
         }
 
         EndEdit();
@@ -240,15 +291,9 @@ public sealed class MainForm : Form
     private void BeginEdit(Job job)
     {
         _editingJob = job;
-        _nameTextBox.Text = job.Name;
-        _startCalendar.SelectionStart = job.StartDate;
-        _startCalendar.SelectionEnd = job.StartDate;
-        _endCalendar.SelectionStart = job.EndDate;
-        _endCalendar.SelectionEnd = job.EndDate;
-        _completedCheckBox.Checked = job.Completed;
-        _pinStartCheckBox.Checked = job.PinStartToToday;
-        _pinEndCheckBox.Checked = job.PinEndToToday;
-        UpdateDateControls();
+        _draft = new Job();
+        CopyJob(job, _draft);
+        LoadDraftIntoControls();
         _saveButton.Text = "Save";
         _cancelButton.Enabled = true;
         _deleteButton.Enabled = true;
@@ -257,27 +302,131 @@ public sealed class MainForm : Form
     private void EndEdit()
     {
         _editingJob = null;
-        _nameTextBox.Clear();
-        _completedCheckBox.Checked = false;
-        _pinStartCheckBox.Checked = false;
-        _pinEndCheckBox.Checked = false;
-        UpdateDateControls();
+        ResetDraft();
         _saveButton.Text = "Add Job";
         _cancelButton.Enabled = false;
         _deleteButton.Enabled = false;
     }
 
-    // A pinned date follows today, so its calendar is snapped to today and locked. Once the job
-    // is completed the pins stop applying: the dates it has at that point are kept, and the pin
-    // checkboxes are disabled (their state is preserved in case the job is reopened).
+    // New jobs start as Prospects: placeholders that only become scheduled work later.
+    private void ResetDraft()
+    {
+        var today = DateTime.Today;
+        _draft = new Job { Phase = JobPhase.Prospect, StartDate = today, EndDate = today };
+        LoadDraftIntoControls();
+    }
+
+    private static void CopyJob(Job from, Job to)
+    {
+        to.Id = from.Id;
+        to.Name = from.Name;
+        to.StartDate = from.StartDate;
+        to.EndDate = from.EndDate;
+        to.Completed = from.Completed;
+        to.PinStartToToday = from.PinStartToToday;
+        to.PinEndToToday = from.PinEndToToday;
+        to.Phase = from.Phase;
+        to.ConstructionStartDate = from.ConstructionStartDate;
+        to.DeliveryStartDate = from.DeliveryStartDate;
+        to.DeliveryTargetDate = from.DeliveryTargetDate;
+    }
+
+    private void StageComboBox_SelectedIndexChanged(object? sender, EventArgs e)
+    {
+        if (_loading)
+        {
+            return;
+        }
+
+        ReadControlsIntoDraft();
+        _jobService.ChangeStage(_draft, (JobStage)_stageComboBox.SelectedIndex);
+        LoadDraftIntoControls();
+    }
+
+    private void LoadDraftIntoControls()
+    {
+        _loading = true;
+        var today = DateTime.Today;
+
+        _nameTextBox.Text = _draft.Name;
+        _startCalendar.SetDate(_draft.StartDate);
+        _endCalendar.SetDate(_draft.EndDate);
+        _pinStartCheckBox.Checked = _draft.PinStartToToday;
+        _pinEndCheckBox.Checked = _draft.PinEndToToday;
+        _completedCheckBox.Checked = _draft.Completed;
+        _stageComboBox.SelectedIndex = (int)JobService.GetStage(_draft);
+
+        _constructionStartPicker.Value = (_draft.ConstructionStartDate ?? today).Date;
+        _deliveryStartPicker.Value = (_draft.DeliveryStartDate ?? today).Date;
+        _finishedPicker.Value = (_draft.Phase is not null && _draft.Completed ? _draft.EndDate : today).Date;
+        _deliveryTargetPicker.Value = (_draft.DeliveryTargetDate ?? today).Date;
+        _deliveryTargetPicker.Checked = _draft.DeliveryTargetDate is not null;
+
+        _loading = false;
+        UpdateDateControls();
+    }
+
+    // Copies what the user has entered into _draft. Phase and Completed of a phased job are only
+    // changed through the Phase dropdown, never read from here.
+    private void ReadControlsIntoDraft()
+    {
+        _draft.Name = _nameTextBox.Text.Trim();
+        _draft.PinStartToToday = _pinStartCheckBox.Checked;
+        _draft.PinEndToToday = _pinEndCheckBox.Checked;
+
+        if (_draft.Phase is null)
+        {
+            _draft.StartDate = _startCalendar.SelectionStart.Date;
+            _draft.EndDate = _endCalendar.SelectionStart.Date;
+            _draft.Completed = _completedCheckBox.Checked;
+            return;
+        }
+
+        var stage = JobService.GetStage(_draft);
+        if (stage != JobStage.Prospect)
+        {
+            _draft.StartDate = _startCalendar.SelectionStart.Date;
+        }
+
+        if (stage >= JobStage.Construction)
+        {
+            _draft.ConstructionStartDate = _constructionStartPicker.Value.Date;
+        }
+
+        if (stage >= JobStage.Delivery)
+        {
+            _draft.DeliveryStartDate = _deliveryStartPicker.Value.Date;
+        }
+
+        if (stage == JobStage.Finished)
+        {
+            _draft.EndDate = _finishedPicker.Value.Date;
+        }
+
+        _draft.DeliveryTargetDate = _deliveryTargetPicker.Checked ? _deliveryTargetPicker.Value.Date : null;
+    }
+
+    // A pinned date follows today, so its calendar is snapped to today and locked. Once an
+    // unphased job is completed the pins stop applying: the dates it has at that point are kept,
+    // and the pin checkboxes are disabled (their state is preserved in case the job is reopened).
+    // Phased jobs have no end pin (they run to today by themselves) and their start can only be
+    // pinned while still in Prospect or Design; the phase date pickers enable as phases are reached.
     private void UpdateDateControls()
     {
-        var completed = _completedCheckBox.Checked;
-        _pinStartCheckBox.Enabled = !completed;
-        _pinEndCheckBox.Enabled = !completed;
+        var stage = (JobStage)Math.Max(0, _stageComboBox.SelectedIndex);
+        var phased = stage != JobStage.NoPhases;
+        var unphasedDone = !phased && _completedCheckBox.Checked;
 
-        var pinStart = _pinStartCheckBox.Checked && !completed;
-        var pinEnd = _pinEndCheckBox.Checked && !completed;
+        _completedCheckBox.Visible = !phased;
+        _pinEndCheckBox.Visible = !phased;
+        _endCalendarContainer.Visible = !phased;
+        _phaseDatesPanel.Visible = phased;
+
+        _pinStartCheckBox.Enabled = !unphasedDone && stage is JobStage.NoPhases or JobStage.Prospect or JobStage.Design;
+        _pinEndCheckBox.Enabled = !unphasedDone;
+
+        var pinStart = _pinStartCheckBox.Checked && _pinStartCheckBox.Enabled;
+        var pinEnd = _pinEndCheckBox.Checked && _pinEndCheckBox.Enabled;
         var today = DateTime.Today;
 
         if (pinStart)
@@ -290,8 +439,13 @@ public sealed class MainForm : Form
             _endCalendar.SetDate(today);
         }
 
-        _startCalendar.Enabled = !pinStart;
+        // A Prospect has no start yet; it is set when the job moves into Design.
+        _startCalendar.Enabled = !pinStart && stage != JobStage.Prospect;
         _endCalendar.Enabled = !pinEnd;
+
+        _constructionStartPicker.Enabled = stage >= JobStage.Construction;
+        _deliveryStartPicker.Enabled = stage >= JobStage.Delivery;
+        _finishedPicker.Enabled = stage == JobStage.Finished;
     }
 
     private JobSortOrder GetSelectedSortOrder() => _sortComboBox.SelectedIndex switch

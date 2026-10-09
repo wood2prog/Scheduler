@@ -71,6 +71,14 @@ public static class JobPhases
 
         job.Phase = stage == JobStage.Finished ? JobPhase.Delivery : Enum.Parse<JobPhase>(stage.ToString());
 
+        // Phased jobs run to today by themselves, and once construction starts the start date is
+        // a fact, not something that should keep following today.
+        job.PinEndToToday = false;
+        if (to >= (int)JobStage.Construction)
+        {
+            job.PinStartToToday = false;
+        }
+
         if (to > from)
         {
             if (from == (int)JobStage.Prospect)
