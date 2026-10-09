@@ -35,15 +35,6 @@ internal sealed class InMemoryJobRepository : IJobRepository
 
     public void Delete(int id) => _jobs.RemoveAll(j => j.Id == id);
 
-    public void SetCompleted(int id, bool completed)
-    {
-        var job = _jobs.FirstOrDefault(j => j.Id == id);
-        if (job is not null)
-        {
-            job.Completed = completed;
-        }
-    }
-
     /// <summary>Adds a job and returns it as stored (with its assigned Id).</summary>
     public Job Seed(Job job)
     {

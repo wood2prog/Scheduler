@@ -12,11 +12,16 @@ public enum JobSortOrder
 public sealed class JobService
 {
     private readonly IJobRepository _repository;
+    private readonly TimeProvider _time;
 
-    public JobService(IJobRepository repository)
+    /// <param name="time">The clock "today" comes from; the system clock unless a test supplies its own.</param>
+    public JobService(IJobRepository repository, TimeProvider? time = null)
     {
         _repository = repository;
+        _time = time ?? TimeProvider.System;
     }
+
+    private DateTime Today => _time.GetLocalNow().Date;
 
     public IReadOnlyList<Job> GetJobs(JobSortOrder sortOrder, bool includeCompleted = true)
     {
@@ -26,7 +31,7 @@ public sealed class JobService
             jobs = jobs.Where(j => !j.Completed).ToList();
         }
 
-        var today = DateTime.Today;
+        var today = Today;
         foreach (var job in jobs)
         {
             ApplyPins(job, today);
@@ -93,7 +98,7 @@ public sealed class JobService
     // overall). Null when there are too few of them.
     public DurationReport? GetPhaseDurationReport(JobPhase phase)
     {
-        var today = DateTime.Today;
+        var today = Today;
         var points = new List<DurationPoint>();
         foreach (var job in _repository.GetAll())
         {
@@ -106,11 +111,9 @@ public sealed class JobService
         return DurationReport.Build($"{phase} Phase Durations", points);
     }
 
-    public static JobStage GetStage(Job job) => JobPhases.GetStage(job);
+    public void ChangeStage(Job job, JobStage stage) => JobPhases.ChangeStage(job, stage, Today);
 
-    public void ChangeStage(Job job, JobStage stage) => JobPhases.ChangeStage(job, stage, DateTime.Today);
-
-    public IReadOnlyList<PhaseSegment> GetSegments(Job job) => JobPhases.GetSegments(job, DateTime.Today);
+    public IReadOnlyList<PhaseSegment> GetSegments(Job job) => JobPhases.GetSegments(job, Today);
 
     public void MovePhaseStart(Job job, JobPhase phase, DateTime date)
     {
@@ -123,6 +126,4 @@ public sealed class JobService
     public void UpdateJob(Job job) => _repository.Update(job);
 
     public void DeleteJob(int id) => _repository.Delete(id);
-
-    public void SetCompleted(int id, bool completed) => _repository.SetCompleted(id, completed);
 }

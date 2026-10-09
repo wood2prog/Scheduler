@@ -382,7 +382,7 @@ public sealed class MainForm : Form
         _pinStartCheckBox.Checked = _draft.PinStartToToday;
         _pinEndCheckBox.Checked = _draft.PinEndToToday;
         _completedCheckBox.Checked = _draft.Completed;
-        _stageComboBox.SelectValue(JobService.GetStage(_draft));
+        _stageComboBox.SelectValue(JobPhases.GetStage(_draft));
 
         _constructionStartPicker.Value = (_draft.ConstructionStartDate ?? today).Date;
         _deliveryStartPicker.Value = (_draft.DeliveryStartDate ?? today).Date;
@@ -410,7 +410,7 @@ public sealed class MainForm : Form
             return;
         }
 
-        var fields = StageFields.For(JobService.GetStage(_draft), _draft.Completed);
+        var fields = StageFields.For(JobPhases.GetStage(_draft), _draft.Completed);
         if (fields.HasStartDate)
         {
             _draft.StartDate = _startCalendar.SelectionStart.Date;

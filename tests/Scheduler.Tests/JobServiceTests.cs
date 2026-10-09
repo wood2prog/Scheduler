@@ -402,8 +402,26 @@ public class JobServiceTests
     }
 
     [Fact]
-    public void GetStage_IsAvailableStatically() =>
-        Assert.Equal(JobStage.Design, JobService.GetStage(new Job { Phase = JobPhase.Design }));
+    public void Today_ComesFromTheInjectedClock()
+    {
+        var fixedDay = new DateTime(2030, 1, 15);
+        var service = new JobService(_repository, new FixedTimeProvider(fixedDay.AddHours(14)));
+        var stored = Seed(phase: JobPhase.Design, start: fixedDay.AddDays(-3));
+        var job = _repository.Get(stored.Id);
+
+        var segment = Assert.Single(service.GetSegments(job));
+        service.ChangeStage(job, JobStage.Construction);
+
+        Assert.Equal(fixedDay.AddDays(1), segment.EndExclusive);
+        Assert.Equal(fixedDay, job.ConstructionStartDate);
+    }
+
+    private sealed class FixedTimeProvider(DateTime now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => new(now, TimeZoneInfo.Local.GetUtcOffset(now));
+
+        public override TimeZoneInfo LocalTimeZone => TimeZoneInfo.Local;
+    }
 
     // ---- plain pass-throughs -------------------------------------------------------------
 
@@ -436,17 +454,5 @@ public class JobServiceTests
         _service.DeleteJob(stored.Id);
 
         Assert.Equal("kept", Assert.Single(_repository.GetAll()).Name);
-    }
-
-    [Fact]
-    public void SetCompleted_Toggles()
-    {
-        var stored = Seed();
-
-        _service.SetCompleted(stored.Id, true);
-        Assert.True(_repository.Get(stored.Id).Completed);
-
-        _service.SetCompleted(stored.Id, false);
-        Assert.False(_repository.Get(stored.Id).Completed);
     }
 }

@@ -178,16 +178,4 @@ public sealed class SqliteJobRepository : IJobRepository
         command.Parameters.AddWithValue("$id", id);
         command.ExecuteNonQuery();
     }
-
-    public void SetCompleted(int id, bool completed)
-    {
-        using var connection = new SqliteConnection(_connectionString);
-        connection.Open();
-
-        using var command = connection.CreateCommand();
-        command.CommandText = "UPDATE Jobs SET Completed = $completed WHERE Id = $id";
-        command.Parameters.AddWithValue("$completed", completed ? 1 : 0);
-        command.Parameters.AddWithValue("$id", id);
-        command.ExecuteNonQuery();
-    }
 }

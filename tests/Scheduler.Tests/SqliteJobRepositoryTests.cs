@@ -254,7 +254,7 @@ public sealed class SqliteJobRepositoryTests : IDisposable
         Assert.Equal("only", Assert.Single(repository.GetAll()).Name);
     }
 
-    // ---- delete and SetCompleted ---------------------------------------------------------
+    // ---- delete -------------------------------------------------------------------------
 
     [Fact]
     public void Delete_RemovesOnlyThatJob()
@@ -278,20 +278,6 @@ public sealed class SqliteJobRepositoryTests : IDisposable
         repository.Delete(999);
 
         Assert.Single(repository.GetAll());
-    }
-
-    [Fact]
-    public void SetCompleted_TogglesTheFlag()
-    {
-        var repository = NewRepository();
-        repository.Add(Make());
-        var id = repository.GetAll().Single().Id;
-
-        repository.SetCompleted(id, true);
-        Assert.True(repository.GetAll().Single().Completed);
-
-        repository.SetCompleted(id, false);
-        Assert.False(repository.GetAll().Single().Completed);
     }
 
     // ---- persistence and migration -------------------------------------------------------
