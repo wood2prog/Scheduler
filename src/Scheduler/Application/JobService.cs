@@ -66,6 +66,11 @@ public sealed class JobService
         }
     }
 
+    // Returns null when there are too few completed jobs for a meaningful curve. Pins never
+    // apply to completed jobs, so their stored dates are final.
+    public DurationReport? GetDurationReport() =>
+        DurationReport.Build(_repository.GetAll().Where(j => j.Completed));
+
     public void AddJob(Job job) => _repository.Add(job);
 
     public void UpdateJob(Job job) => _repository.Update(job);

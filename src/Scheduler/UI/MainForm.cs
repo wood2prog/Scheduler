@@ -10,6 +10,7 @@ public sealed class MainForm : Form
     private readonly GanttChartPanel _ganttChartPanel;
     private readonly ComboBox _sortComboBox;
     private readonly CheckBox _hideCompletedCheckBox;
+    private readonly ComboBox _reportComboBox;
     private readonly TextBox _nameTextBox;
     private readonly MonthCalendar _startCalendar;
     private readonly MonthCalendar _endCalendar;
@@ -110,6 +111,24 @@ public sealed class MainForm : Form
         optionsPanel.Controls.Add(_completedCheckBox);
         datePanel.Controls.Add(optionsPanel);
 
+        _reportComboBox = new ComboBox
+        {
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            Width = 140,
+            Margin = new Padding(3, 0, 3, 3)
+        };
+        _reportComboBox.Items.Add("Completed Job Durations");
+        _reportComboBox.SelectedIndex = 0;
+
+        var generateReportButton = new Button { Text = "Generate Report", AutoSize = true };
+        generateReportButton.Click += GenerateReportButton_Click;
+
+        // Reports sit under the checkboxes in the same column, so the form keeps its original
+        // wide, short shape instead of growing a new column.
+        optionsPanel.Controls.Add(new Label { Text = "Reports", AutoSize = true, Margin = new Padding(3, 14, 3, 3) });
+        optionsPanel.Controls.Add(_reportComboBox);
+        optionsPanel.Controls.Add(generateReportButton);
+
         Controls.Add(_ganttChartPanel);
         Controls.Add(datePanel);
         Controls.Add(topPanel);
@@ -175,6 +194,23 @@ public sealed class MainForm : Form
 
         EndEdit();
         RefreshJobList();
+    }
+
+    private void GenerateReportButton_Click(object? sender, EventArgs e)
+    {
+        // Only one report type exists so far; add a switch on _reportComboBox.SelectedIndex
+        // when more are added.
+        var report = _jobService.GetDurationReport();
+        if (report is null)
+        {
+            MessageBox.Show(this,
+                $"At least {DurationReport.MinimumJobs} completed jobs are needed to generate this report.",
+                "Scheduler", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        using var form = new ReportForm(report);
+        form.ShowDialog(this);
     }
 
     private void CancelButton_Click(object? sender, EventArgs e)
