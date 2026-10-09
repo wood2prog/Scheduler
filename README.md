@@ -25,6 +25,14 @@ dotnet run --project src/Scheduler/Scheduler.csproj
 
 On first run, the app creates a `scheduler.db` SQLite file under `Documents/Scheduler` and initializes the `Jobs` table automatically.
 
+## Running the tests
+
+```
+dotnet test
+```
+
+The xUnit project in `tests/Scheduler.Tests` covers the phase rules, report statistics, job service behaviour, and the SQLite repository (including migrating databases created by older versions).
+
 ## Usage
 
 - The main window shows a Gantt chart with one row per job and one column per day. Each job is drawn as a colored bar spanning its start-to-end days; completed jobs render as a gray hatched bar instead. The date header and job-name column stay pinned while the chart scrolls horizontally/vertically.
@@ -74,6 +82,7 @@ src/Scheduler/
   UI/            MainForm (WinForms UI), GanttChartPanel (Gantt chart), ReportForm + DurationReportPanel (reports), WindowSettings (bounds persistence)
   Assets/        Application icon
   Program.cs     Composition root / app entry point
+tests/Scheduler.Tests/  xUnit tests (Application, Data and Domain layers)
 installer/       WiX installer project (Scheduler.Installer.wixproj, Package.wxs)
 build-installer.ps1  Publishes + packages the MSI installer
 ```

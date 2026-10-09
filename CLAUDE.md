@@ -10,7 +10,9 @@ All commands run from the repo root against `Scheduler.slnx`.
 - Run: `dotnet run --project src/Scheduler/Scheduler.csproj`
 - Restore packages: `dotnet restore`
 
-There is no test project yet. When adding one, prefer a class library test project (e.g. `tests/Scheduler.Tests`) added to `Scheduler.slnx` via `dotnet sln add`, targeting the `Application` and `Domain` layers directly rather than the WinForms UI.
+- Test: `dotnet test` (xUnit project at `tests/Scheduler.Tests`, part of `Scheduler.slnx`).
+
+Tests target the `Application`, `Data` and `Domain` layers directly, not the WinForms UI. Pure phase/report logic takes "today" as a parameter, so tests use a fixed date (`TestJobs.Origin`); `JobService` reads the real clock, so its tests build dates relative to `DateTime.Today`. `Data` tests run the real `SqliteJobRepository` against a throwaway temp file, including migrating older database schemas. The test project targets `net9.0-windows` because it references the WinForms project. When changing phase, report, pin, or schema logic, add or update tests alongside it.
 
 The app is Windows-only (WinForms, `net9.0-windows`) and must be built/run on Windows.
 
