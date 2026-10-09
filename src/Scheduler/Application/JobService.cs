@@ -75,7 +75,25 @@ public sealed class JobService
     // Returns null when there are too few completed jobs for a meaningful curve. Pins never
     // apply to completed jobs, so their stored dates are final.
     public DurationReport? GetDurationReport() =>
-        DurationReport.Build(_repository.GetAll().Where(j => j.Completed));
+        DurationReport.Build("Completed Job Durations",
+            _repository.GetAll().Where(j => j.Completed).Select(DurationPoint.ForWholeJob));
+
+    // One phase's lengths, over the jobs that have finished that phase (they needn't be finished
+    // overall). Null when there are too few of them.
+    public DurationReport? GetPhaseDurationReport(JobPhase phase)
+    {
+        var today = DateTime.Today;
+        var points = new List<DurationPoint>();
+        foreach (var job in _repository.GetAll())
+        {
+            if (JobPhases.GetCompletedPhaseDays(job, phase, today) is { } days)
+            {
+                points.Add(new DurationPoint(job, days));
+            }
+        }
+
+        return DurationReport.Build($"{phase} Phase Durations", points);
+    }
 
     public static JobStage GetStage(Job job) => JobPhases.GetStage(job);
 

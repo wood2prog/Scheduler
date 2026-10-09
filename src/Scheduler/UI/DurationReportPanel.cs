@@ -73,7 +73,7 @@ public sealed class DurationReportPanel : Panel
         float ToX(double days) => plot.Left + (float)((days - minX) / (maxX - minX) * plot.Width);
         float ToY(double density) => plot.Bottom - (float)(density * plot.Height * CurvePeakFraction);
 
-        TextRenderer.DrawText(g, "Completed Job Durations", _titleFont, new Rectangle(0, 8, ClientSize.Width, 28),
+        TextRenderer.DrawText(g, _report.Title, _titleFont, new Rectangle(0, 8, ClientSize.Width, 28),
             Color.Black, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
 
         DrawAxis(g, plot, minX, maxX, ToX);
@@ -96,7 +96,7 @@ public sealed class DurationReportPanel : Panel
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.Top);
         }
 
-        TextRenderer.DrawText(g, "Job length (days)", _axisFont,
+        TextRenderer.DrawText(g, "Length (days)", _axisFont,
             new Rectangle(plot.Left, plot.Bottom + 26, plot.Width, 18), Color.DimGray,
             TextFormatFlags.HorizontalCenter | TextFormatFlags.Top);
     }

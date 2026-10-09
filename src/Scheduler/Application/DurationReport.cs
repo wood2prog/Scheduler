@@ -2,14 +2,19 @@ using Scheduler.Domain;
 
 namespace Scheduler.Application;
 
-/// <summary>A completed job and its length in days (start and end days both count).</summary>
-public sealed record DurationPoint(Job Job, int Days);
+/// <summary>A job and a length in days: the whole job, or one phase of it.</summary>
+public sealed record DurationPoint(Job Job, int Days)
+{
+    /// <summary>Start to end, both days counting.</summary>
+    public static DurationPoint ForWholeJob(Job job) =>
+        new(job, (job.EndDate.Date - job.StartDate.Date).Days + 1);
+}
 
 /// <summary>
-/// Job-length statistics behind the bell-curve report. The curve is a normal distribution
+/// Length statistics behind a bell-curve report. The curve is a normal distribution
 /// centered on <see cref="Median"/> with spread <see cref="StdDev"/>.
 /// </summary>
-public sealed record DurationReport(IReadOnlyList<DurationPoint> Points, double Median, double StdDev)
+public sealed record DurationReport(string Title, IReadOnlyList<DurationPoint> Points, double Median, double StdDev)
 {
     public const int MinimumJobs = 3;
 
@@ -17,10 +22,9 @@ public sealed record DurationReport(IReadOnlyList<DurationPoint> Points, double 
     // would be an infinitely thin spike.
     private const double MinimumStdDev = 1.0;
 
-    public static DurationReport? Build(IEnumerable<Job> completedJobs)
+    public static DurationReport? Build(string title, IEnumerable<DurationPoint> durations)
     {
-        var points = completedJobs
-            .Select(j => new DurationPoint(j, (j.EndDate.Date - j.StartDate.Date).Days + 1))
+        var points = durations
             .OrderBy(p => p.Days)
             .ThenBy(p => p.Job.Name)
             .ToList();
@@ -38,6 +42,6 @@ public sealed record DurationReport(IReadOnlyList<DurationPoint> Points, double 
         double mean = points.Average(p => p.Days);
         double variance = points.Sum(p => Math.Pow(p.Days - mean, 2)) / (points.Count - 1);
 
-        return new DurationReport(points, median, Math.Max(Math.Sqrt(variance), MinimumStdDev));
+        return new DurationReport(title, points, median, Math.Max(Math.Sqrt(variance), MinimumStdDev));
     }
 }

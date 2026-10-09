@@ -127,6 +127,29 @@ public static class JobPhases
         }
     }
 
+    /// <summary>
+    /// How many days the job spent in a phase, or null if it hasn't completed that phase yet (or
+    /// skipped it, spending no days there) and so has no finished length to report.
+    /// </summary>
+    public static int? GetCompletedPhaseDays(Job job, JobPhase phase, DateTime today)
+    {
+        var stage = GetStage(job);
+        var completed = phase switch
+        {
+            JobPhase.Design => stage >= JobStage.Construction,
+            JobPhase.Construction => stage >= JobStage.Delivery,
+            JobPhase.Delivery => stage == JobStage.Finished,
+            _ => false
+        };
+        if (!completed)
+        {
+            return null;
+        }
+
+        var days = GetSegments(job, today).FirstOrDefault(s => s.Phase == phase)?.Days ?? 0;
+        return days > 0 ? days : null;
+    }
+
     /// <summary>Moves the seam that starts <paramref name="phase"/> (Construction or Delivery) to another day.</summary>
     public static void SetPhaseStart(Job job, JobPhase phase, DateTime date)
     {

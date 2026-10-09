@@ -7,7 +7,7 @@ public sealed class ReportForm : Form
 {
     public ReportForm(DurationReport report)
     {
-        Text = "Report - Completed Job Durations";
+        Text = $"Report - {report.Title}";
         Width = 900;
         Height = 600;
         StartPosition = FormStartPosition.CenterParent;

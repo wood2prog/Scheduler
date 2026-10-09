@@ -168,7 +168,8 @@ public sealed class MainForm : Form
             Width = 140,
             Margin = new Padding(3, 0, 3, 3)
         };
-        _reportComboBox.Items.Add("Completed Job Durations");
+        _reportComboBox.Items.AddRange(["Completed Job Durations", "Design Phase Durations",
+            "Construction Phase Durations", "Delivery Phase Durations"]);
         _reportComboBox.SelectedIndex = 0;
 
         var generateReportButton = new Button { Text = "Generate Report", AutoSize = true };
@@ -250,13 +251,18 @@ public sealed class MainForm : Form
 
     private void GenerateReportButton_Click(object? sender, EventArgs e)
     {
-        // Only one report type exists so far; add a switch on _reportComboBox.SelectedIndex
-        // when more are added.
-        var report = _jobService.GetDurationReport();
+        // Items are in the order added to _reportComboBox.
+        var (report, missing) = _reportComboBox.SelectedIndex switch
+        {
+            1 => (_jobService.GetPhaseDurationReport(JobPhase.Design), "jobs that have finished Design"),
+            2 => (_jobService.GetPhaseDurationReport(JobPhase.Construction), "jobs that have finished Construction"),
+            3 => (_jobService.GetPhaseDurationReport(JobPhase.Delivery), "jobs that have finished Delivery"),
+            _ => (_jobService.GetDurationReport(), "completed jobs")
+        };
         if (report is null)
         {
             MessageBox.Show(this,
-                $"At least {DurationReport.MinimumJobs} completed jobs are needed to generate this report.",
+                $"At least {DurationReport.MinimumJobs} {missing} are needed to generate this report.",
                 "Scheduler", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
