@@ -37,7 +37,7 @@ bar is split into three consecutive phases:
 - [x] 4. Gantt drawing: three colored segments, delivery target marker, overdue shading.
 - [x] 5. Gantt seam hover + drag to change a phase date.
 - [x] 6. Per-phase reports (Design / Construction / Delivery durations) in the Reports dropdown.
-- [ ] 7. Wrap-up: update CLAUDE.md / README, bump installer version if releasing.
+- [x] 7. Wrap-up: update CLAUDE.md / README, bump installer version if releasing.
 
 ## Open questions / decisions log
 
