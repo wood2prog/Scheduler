@@ -5,6 +5,10 @@ namespace Scheduler.UI;
 
 public sealed class MainForm : Form
 {
+    /// <summary>A report on one phase's lengths, or on whole jobs when <paramref name="Phase"/> is null.</summary>
+    /// <param name="Missing">What there must be enough of, for the "not enough data" message.</param>
+    private sealed record ReportKind(JobPhase? Phase, string Missing);
+
     private readonly JobService _jobService;
 
     private readonly GanttChartPanel _ganttChartPanel;
@@ -66,8 +70,10 @@ public sealed class MainForm : Form
             DropDownStyle = ComboBoxStyle.DropDownList,
             Width = 150
         };
-        _sortComboBox.Items.AddRange(["Start Date", "End Date", "Name"]);
-        _sortComboBox.SelectedIndex = 0;
+        _sortComboBox.SetOptions(
+            new ComboOption<JobSortOrder>("Start Date", JobSortOrder.StartDate),
+            new ComboOption<JobSortOrder>("End Date", JobSortOrder.EndDate),
+            new ComboOption<JobSortOrder>("Name", JobSortOrder.Name));
         _sortComboBox.SelectedIndexChanged += (_, _) => RefreshJobList();
 
         _hideCompletedCheckBox = new CheckBox { Text = "Hide completed", AutoSize = true, Margin = new Padding(15, 6, 3, 3) };
@@ -89,8 +95,13 @@ public sealed class MainForm : Form
             Width = 140,
             Margin = new Padding(3, 0, 3, 8)
         };
-        _stageComboBox.Items.AddRange(["No phases", "Prospect", "Design", "Construction", "Delivery", "Finished"]);
-        _stageComboBox.SelectedIndex = 0;
+        _stageComboBox.SetOptions(
+            new ComboOption<JobStage>("No phases", JobStage.NoPhases),
+            new ComboOption<JobStage>("Prospect", JobStage.Prospect),
+            new ComboOption<JobStage>("Design", JobStage.Design),
+            new ComboOption<JobStage>("Construction", JobStage.Construction),
+            new ComboOption<JobStage>("Delivery", JobStage.Delivery),
+            new ComboOption<JobStage>("Finished", JobStage.Finished));
         _stageComboBox.SelectedIndexChanged += StageComboBox_SelectedIndexChanged;
 
         _constructionStartPicker = CreateDatePicker();
@@ -168,9 +179,11 @@ public sealed class MainForm : Form
             Width = 140,
             Margin = new Padding(3, 0, 3, 3)
         };
-        _reportComboBox.Items.AddRange(["Completed Job Durations", "Design Phase Durations",
-            "Construction Phase Durations", "Delivery Phase Durations"]);
-        _reportComboBox.SelectedIndex = 0;
+        _reportComboBox.SetOptions(
+            new ComboOption<ReportKind>("Completed Job Durations", new ReportKind(null, "completed jobs")),
+            new ComboOption<ReportKind>("Design Phase Durations", new ReportKind(JobPhase.Design, "jobs that have finished Design")),
+            new ComboOption<ReportKind>("Construction Phase Durations", new ReportKind(JobPhase.Construction, "jobs that have finished Construction")),
+            new ComboOption<ReportKind>("Delivery Phase Durations", new ReportKind(JobPhase.Delivery, "jobs that have finished Delivery")));
 
         var generateReportButton = new Button { Text = "Generate Report", AutoSize = true };
         generateReportButton.Click += GenerateReportButton_Click;
@@ -251,18 +264,14 @@ public sealed class MainForm : Form
 
     private void GenerateReportButton_Click(object? sender, EventArgs e)
     {
-        // Items are in the order added to _reportComboBox.
-        var (report, missing) = _reportComboBox.SelectedIndex switch
-        {
-            1 => (_jobService.GetPhaseDurationReport(JobPhase.Design), "jobs that have finished Design"),
-            2 => (_jobService.GetPhaseDurationReport(JobPhase.Construction), "jobs that have finished Construction"),
-            3 => (_jobService.GetPhaseDurationReport(JobPhase.Delivery), "jobs that have finished Delivery"),
-            _ => (_jobService.GetDurationReport(), "completed jobs")
-        };
+        var kind = _reportComboBox.GetSelectedValue<ReportKind>();
+        var report = kind.Phase is { } phase
+            ? _jobService.GetPhaseDurationReport(phase)
+            : _jobService.GetDurationReport();
         if (report is null)
         {
             MessageBox.Show(this,
-                $"At least {DurationReport.MinimumJobs} {missing} are needed to generate this report.",
+                $"At least {DurationReport.MinimumJobs} {kind.Missing} are needed to generate this report.",
                 "Scheduler", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
@@ -358,7 +367,7 @@ public sealed class MainForm : Form
         }
 
         ReadControlsIntoDraft();
-        _jobService.ChangeStage(_draft, (JobStage)_stageComboBox.SelectedIndex);
+        _jobService.ChangeStage(_draft, _stageComboBox.GetSelectedValue<JobStage>());
         LoadDraftIntoControls();
     }
 
@@ -373,7 +382,7 @@ public sealed class MainForm : Form
         _pinStartCheckBox.Checked = _draft.PinStartToToday;
         _pinEndCheckBox.Checked = _draft.PinEndToToday;
         _completedCheckBox.Checked = _draft.Completed;
-        _stageComboBox.SelectedIndex = (int)JobService.GetStage(_draft);
+        _stageComboBox.SelectValue(JobService.GetStage(_draft));
 
         _constructionStartPicker.Value = (_draft.ConstructionStartDate ?? today).Date;
         _deliveryStartPicker.Value = (_draft.DeliveryStartDate ?? today).Date;
@@ -401,23 +410,23 @@ public sealed class MainForm : Form
             return;
         }
 
-        var stage = JobService.GetStage(_draft);
-        if (stage != JobStage.Prospect)
+        var fields = StageFields.For(JobService.GetStage(_draft), _draft.Completed);
+        if (fields.HasStartDate)
         {
             _draft.StartDate = _startCalendar.SelectionStart.Date;
         }
 
-        if (stage >= JobStage.Construction)
+        if (fields.HasConstructionStart)
         {
             _draft.ConstructionStartDate = _constructionStartPicker.Value.Date;
         }
 
-        if (stage >= JobStage.Delivery)
+        if (fields.HasDeliveryStart)
         {
             _draft.DeliveryStartDate = _deliveryStartPicker.Value.Date;
         }
 
-        if (stage == JobStage.Finished)
+        if (fields.HasFinishedDate)
         {
             _draft.EndDate = _finishedPicker.Value.Date;
         }
@@ -432,17 +441,15 @@ public sealed class MainForm : Form
     // pinned while still in Prospect or Design; the phase date pickers enable as phases are reached.
     private void UpdateDateControls()
     {
-        var stage = (JobStage)Math.Max(0, _stageComboBox.SelectedIndex);
-        var phased = stage != JobStage.NoPhases;
-        var unphasedDone = !phased && _completedCheckBox.Checked;
+        var fields = StageFields.For(_stageComboBox.GetSelectedValue<JobStage>(), _completedCheckBox.Checked);
 
-        _completedCheckBox.Visible = !phased;
-        _pinEndCheckBox.Visible = !phased;
-        _endCalendarContainer.Visible = !phased;
-        _phaseDatesPanel.Visible = phased;
+        _completedCheckBox.Visible = !fields.UsesPhases;
+        _pinEndCheckBox.Visible = !fields.UsesPhases;
+        _endCalendarContainer.Visible = !fields.UsesPhases;
+        _phaseDatesPanel.Visible = fields.UsesPhases;
 
-        _pinStartCheckBox.Enabled = !unphasedDone && stage is JobStage.NoPhases or JobStage.Prospect or JobStage.Design;
-        _pinEndCheckBox.Enabled = !unphasedDone;
+        _pinStartCheckBox.Enabled = fields.CanPinStart;
+        _pinEndCheckBox.Enabled = fields.CanPinEnd;
 
         var pinStart = _pinStartCheckBox.Checked && _pinStartCheckBox.Enabled;
         var pinEnd = _pinEndCheckBox.Checked && _pinEndCheckBox.Enabled;
@@ -459,24 +466,17 @@ public sealed class MainForm : Form
         }
 
         // A Prospect has no start yet; it is set when the job moves into Design.
-        _startCalendar.Enabled = !pinStart && stage != JobStage.Prospect;
+        _startCalendar.Enabled = !pinStart && fields.HasStartDate;
         _endCalendar.Enabled = !pinEnd;
 
-        _constructionStartPicker.Enabled = stage >= JobStage.Construction;
-        _deliveryStartPicker.Enabled = stage >= JobStage.Delivery;
-        _finishedPicker.Enabled = stage == JobStage.Finished;
+        _constructionStartPicker.Enabled = fields.HasConstructionStart;
+        _deliveryStartPicker.Enabled = fields.HasDeliveryStart;
+        _finishedPicker.Enabled = fields.HasFinishedDate;
     }
-
-    private JobSortOrder GetSelectedSortOrder() => _sortComboBox.SelectedIndex switch
-    {
-        1 => JobSortOrder.EndDate,
-        2 => JobSortOrder.Name,
-        _ => JobSortOrder.StartDate
-    };
 
     private void RefreshJobList()
     {
-        var jobs = _jobService.GetJobs(GetSelectedSortOrder(), includeCompleted: !_hideCompletedCheckBox.Checked);
+        var jobs = _jobService.GetJobs(_sortComboBox.GetSelectedValue<JobSortOrder>(), includeCompleted: !_hideCompletedCheckBox.Checked);
         _ganttChartPanel.SetJobs(jobs, _jobService.GetSegments);
     }
 }
