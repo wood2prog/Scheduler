@@ -52,6 +52,19 @@ public sealed class GanttChartPanel : Panel
 
     public event Action<Job>? JobClicked;
 
+    /// <summary>Raised when the user drags the seam that starts <c>phase</c> to a new day.</summary>
+    public event Action<Job, JobPhase, DateTime>? SeamMoved;
+
+    private const int SeamGrabWidth = 4;
+
+    // A seam is the boundary between two neighbouring phase stretches of a job's bar. Min/Max
+    // limit how far it can be dragged (the outer edges of the two stretches it separates).
+    private sealed record SeamHit(Job Job, JobPhase Phase, DateTime Date, DateTime Min, DateTime Max);
+
+    private SeamHit? _dragSeam;
+    private DateTime _dragDate;
+    private bool _suppressClick;
+
     public GanttChartPanel()
     {
         // A plain Panel's AutoScroll uses the OS's ScrollWindowEx to bit-shift the
@@ -78,8 +91,13 @@ public sealed class GanttChartPanel : Panel
     /// <param name="getSegments">The phase stretches of a phased job (empty for unphased jobs and Prospects).</param>
     public void SetJobs(IReadOnlyList<Job> jobs, Func<Job, IReadOnlyList<PhaseSegment>> getSegments)
     {
+        // Keep the user's place across refreshes (e.g. after dragging a seam): remember the
+        // first visible day by date, since the range start moves when the data changes.
+        var firstVisibleDay = _rangeStart.AddDays(_hScrollBar.Value / DayWidth);
+        int verticalOffset = _vScrollBar.Value;
+
         _jobs = jobs;
-        _segments = jobs.Where(j => j.Phase is not null).ToDictionary(j => j.Id, getSegments);
+        _segments =jobs.Where(j => j.Phase is not null).ToDictionary(j => j.Id, getSegments);
 
         // The visible range covers everything drawn: plain bars, phase stretches and delivery
         // targets. A Prospect without a target draws nothing, so it doesn't widen the range.
@@ -118,6 +136,10 @@ public sealed class GanttChartPanel : Panel
         }
 
         UpdateScrollBars();
+        _hScrollBar.Value = Math.Clamp((firstVisibleDay - _rangeStart).Days * DayWidth, 0,
+            Math.Max(0, _hScrollBar.Maximum - _hScrollBar.LargeChange + 1));
+        _vScrollBar.Value = Math.Clamp(verticalOffset, 0,
+            Math.Max(0, _vScrollBar.Maximum - _vScrollBar.LargeChange + 1));
         Invalidate();
     }
 
@@ -139,16 +161,100 @@ public sealed class GanttChartPanel : Panel
     protected override void OnMouseClick(MouseEventArgs e)
     {
         base.OnMouseClick(e);
+        if (_suppressClick)
+        {
+            _suppressClick = false;
+            return;
+        }
+
         if (e.Button == MouseButtons.Left && GetJobAt(e.Location) is { } job)
         {
             JobClicked?.Invoke(job);
         }
     }
 
+    protected override void OnMouseDown(MouseEventArgs e)
+    {
+        base.OnMouseDown(e);
+        _suppressClick = false;
+        if (e.Button == MouseButtons.Left && GetSeamAt(e.Location) is { } seam)
+        {
+            _dragSeam = seam;
+            _dragDate = seam.Date;
+            _suppressClick = true;
+            Capture = true;
+        }
+    }
+
     protected override void OnMouseMove(MouseEventArgs e)
     {
         base.OnMouseMove(e);
-        Cursor = GetJobAt(e.Location) is null ? Cursors.Default : Cursors.Hand;
+
+        if (_dragSeam is { } drag)
+        {
+            // Snap to the nearest day boundary under the pointer.
+            int dayBoundary = (int)Math.Round((e.X - (NameColumnWidth - _hScrollBar.Value)) / (double)DayWidth);
+            var date = _rangeStart.AddDays(dayBoundary);
+            _dragDate = date < drag.Min ? drag.Min : date > drag.Max ? drag.Max : date;
+            Invalidate();
+            return;
+        }
+
+        Cursor = GetSeamAt(e.Location) is not null ? Cursors.SizeWE
+            : GetJobAt(e.Location) is null ? Cursors.Default
+            : Cursors.Hand;
+    }
+
+    protected override void OnMouseUp(MouseEventArgs e)
+    {
+        base.OnMouseUp(e);
+        if (_dragSeam is not { } drag)
+        {
+            return;
+        }
+
+        _dragSeam = null;
+        Capture = false;
+        Invalidate();
+        if (_dragDate != drag.Date)
+        {
+            SeamMoved?.Invoke(drag.Job, drag.Phase, _dragDate);
+        }
+    }
+
+    private SeamHit? GetSeamAt(Point location)
+    {
+        int bodyTop = HeaderHeight;
+        int bodyBottom = ClientSize.Height - _hScrollBar.Height;
+        int bodyRight = ClientSize.Width - _vScrollBar.Width;
+        if (location.X < NameColumnWidth || location.X >= bodyRight || location.Y < bodyTop || location.Y >= bodyBottom)
+        {
+            return null;
+        }
+
+        int rowIndex = (location.Y - bodyTop + _vScrollBar.Value) / RowHeight;
+        if (rowIndex < 0 || rowIndex >= _jobs.Count || _jobs[rowIndex].Phase is null)
+        {
+            return null;
+        }
+
+        var job = _jobs[rowIndex];
+        var segments = _segments[job.Id];
+        int dx = NameColumnWidth - _hScrollBar.Value;
+        SeamHit? best = null;
+        int bestDistance = SeamGrabWidth + 1;
+        for (int i = 0; i + 1 < segments.Count; i++)
+        {
+            var seamDate = segments[i + 1].Start;
+            int distance = Math.Abs(location.X - (dx + (seamDate - _rangeStart).Days * DayWidth));
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                best = new SeamHit(job, segments[i + 1].Phase, seamDate, segments[i].Start, segments[i + 1].EndExclusive);
+            }
+        }
+
+        return best;
     }
 
     private Job? GetJobAt(Point location)
@@ -206,6 +312,7 @@ public sealed class GanttChartPanel : Panel
         var state = g.Save();
         g.SetClip(new Rectangle(bodyLeft, bodyTop, bodyWidth, bodyHeight));
         DrawGridAndBars(g, dx, dy);
+        DrawSeamDragGuide(g, dx, bodyTop, bodyHeight);
         g.Restore(state);
 
         state = g.Save();
@@ -221,6 +328,27 @@ public sealed class GanttChartPanel : Panel
         using var cornerBrush = new SolidBrush(HeaderBackColor);
         g.FillRectangle(cornerBrush, 0, 0, NameColumnWidth, HeaderHeight);
         g.DrawRectangle(Pens.Gray, 0, 0, NameColumnWidth - 1, HeaderHeight - 1);
+    }
+
+    // While a seam is being dragged, a dashed line and a date label show where it will land.
+    private void DrawSeamDragGuide(Graphics g, int dx, int bodyTop, int bodyHeight)
+    {
+        if (_dragSeam is null)
+        {
+            return;
+        }
+
+        int x = dx + (_dragDate - _rangeStart).Days * DayWidth;
+        using var pen = new Pen(Color.FromArgb(60, 60, 60), 1.5f) { DashStyle = DashStyle.Dash };
+        g.DrawLine(pen, x, bodyTop, x, bodyTop + bodyHeight);
+
+        var label = _dragDate.ToString("MMM d");
+        var size = TextRenderer.MeasureText(label, Font);
+        var labelRect = new Rectangle(x + 4, bodyTop + 2, size.Width + 6, size.Height + 2);
+        g.FillRectangle(Brushes.LightYellow, labelRect);
+        g.DrawRectangle(Pens.Gray, labelRect);
+        TextRenderer.DrawText(g, label, Font, labelRect, Color.Black,
+            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
     }
 
     private void DrawGridAndBars(Graphics g, int dx, int dy)

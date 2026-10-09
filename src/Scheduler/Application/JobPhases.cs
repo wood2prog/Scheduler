@@ -127,6 +127,20 @@ public static class JobPhases
         }
     }
 
+    /// <summary>Moves the seam that starts <paramref name="phase"/> (Construction or Delivery) to another day.</summary>
+    public static void SetPhaseStart(Job job, JobPhase phase, DateTime date)
+    {
+        switch (phase)
+        {
+            case JobPhase.Construction:
+                job.ConstructionStartDate = date.Date;
+                break;
+            case JobPhase.Delivery:
+                job.DeliveryStartDate = date.Date;
+                break;
+        }
+    }
+
     /// <summary>
     /// The colored stretches to draw for a phased job. Empty for jobs without phases and for
     /// Prospects (placeholders with nothing on the timeline). A job still in progress runs up to

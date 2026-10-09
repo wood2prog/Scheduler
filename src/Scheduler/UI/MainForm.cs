@@ -59,6 +59,7 @@ public sealed class MainForm : Form
             Dock = DockStyle.Fill
         };
         _ganttChartPanel.JobClicked += BeginEdit;
+        _ganttChartPanel.SeamMoved += GanttChartPanel_SeamMoved;
 
         _sortComboBox = new ComboBox
         {
@@ -286,6 +287,18 @@ public sealed class MainForm : Form
         _jobService.DeleteJob(job.Id);
         EndEdit();
         RefreshJobList();
+    }
+
+    private void GanttChartPanel_SeamMoved(Job job, JobPhase phase, DateTime date)
+    {
+        _jobService.MovePhaseStart(job, phase, date);
+        RefreshJobList();
+
+        // If this job is open in the form, reload it so the phase date pickers match the chart.
+        if (_editingJob?.Id == job.Id)
+        {
+            BeginEdit(job);
+        }
     }
 
     private void BeginEdit(Job job)

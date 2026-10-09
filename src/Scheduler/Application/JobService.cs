@@ -83,6 +83,12 @@ public sealed class JobService
 
     public IReadOnlyList<PhaseSegment> GetSegments(Job job) => JobPhases.GetSegments(job, DateTime.Today);
 
+    public void MovePhaseStart(Job job, JobPhase phase, DateTime date)
+    {
+        JobPhases.SetPhaseStart(job, phase, date);
+        _repository.Update(job);
+    }
+
     public void AddJob(Job job) => _repository.Add(job);
 
     public void UpdateJob(Job job) => _repository.Update(job);
