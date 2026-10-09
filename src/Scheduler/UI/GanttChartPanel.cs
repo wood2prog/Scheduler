@@ -49,6 +49,10 @@ public sealed class GanttChartPanel : Panel
     private Dictionary<int, IReadOnlyList<PhaseSegment>> _segments = [];
     private DateTime _rangeStart = DateTime.Today;
     private int _totalDays = 30;
+    private DateTime _dataStart = DateTime.Today;
+    private int _dataDays = 30;
+    private int _padDays;
+    private bool _centerPending = true;
 
     public event Action<Job>? JobClicked;
 
@@ -126,21 +130,43 @@ public sealed class GanttChartPanel : Panel
 
         if (dates.Count == 0)
         {
-            _rangeStart = DateTime.Today;
-            _totalDays = 30;
+            _dataStart = DateTime.Today;
+            _dataDays = 30;
         }
         else
         {
-            _rangeStart = dates.Min().AddDays(-1);
-            _totalDays = Math.Max(1, (dates.Max() - _rangeStart).Days + 2);
+            // Today is always in range so the chart can open centred on it.
+            dates.Add(DateTime.Today);
+            _dataStart = dates.Min().AddDays(-1);
+            _dataDays = Math.Max(1, (dates.Max() - _dataStart).Days + 2);
         }
 
-        UpdateScrollBars();
+        ApplyRange();
         _hScrollBar.Value = Math.Clamp((firstVisibleDay - _rangeStart).Days * DayWidth, 0,
             Math.Max(0, _hScrollBar.Maximum - _hScrollBar.LargeChange + 1));
         _vScrollBar.Value = Math.Clamp(verticalOffset, 0,
             Math.Max(0, _vScrollBar.Maximum - _vScrollBar.LargeChange + 1));
         Invalidate();
+    }
+
+    // The scrollable range is the data range plus _padDays of empty space either side. The pad
+    // is set once, on first paint, so today can sit in the middle even when it is at the edge.
+    private void ApplyRange()
+    {
+        _rangeStart = _dataStart.AddDays(-_padDays);
+        _totalDays = _dataDays + 2 * _padDays;
+        UpdateScrollBars();
+    }
+
+    private void CenterOnToday()
+    {
+        int viewportWidth = ClientSize.Width - NameColumnWidth - _vScrollBar.Width;
+        _padDays = Math.Max(0, viewportWidth / DayWidth / 2 + 2);
+        ApplyRange();
+
+        int todayX = (DateTime.Today - _rangeStart).Days * DayWidth + DayWidth / 2;
+        _hScrollBar.Value = Math.Clamp(todayX - viewportWidth / 2, 0,
+            Math.Max(0, _hScrollBar.Maximum - _hScrollBar.LargeChange + 1));
     }
 
     protected override void OnResize(EventArgs e)
@@ -298,6 +324,12 @@ public sealed class GanttChartPanel : Panel
     // lock-step no matter how scrolling offsets are applied.
     protected override void OnPaint(PaintEventArgs e)
     {
+        if (_centerPending && ClientSize.Width > NameColumnWidth + DayWidth)
+        {
+            _centerPending = false;
+            CenterOnToday();
+        }
+
         var g = e.Graphics;
         g.Clear(BackColor);
 
