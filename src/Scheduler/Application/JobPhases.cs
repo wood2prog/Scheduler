@@ -69,7 +69,7 @@ public static class JobPhases
             stamp = job.StartDate.Date;
         }
 
-        job.Phase = stage == JobStage.Finished ? JobPhase.Delivery : Enum.Parse<JobPhase>(stage.ToString());
+        job.Phase = PhaseOf(stage);
 
         // Phased jobs run to today by themselves, and once construction starts the start date is
         // a fact, not something that should keep following today.
@@ -127,6 +127,15 @@ public static class JobPhases
         }
     }
 
+    // Finished is Delivery plus Completed; NoPhases is handled before this is called.
+    private static JobPhase PhaseOf(JobStage stage) => stage switch
+    {
+        JobStage.Prospect => JobPhase.Prospect,
+        JobStage.Design => JobPhase.Design,
+        JobStage.Construction => JobPhase.Construction,
+        _ => JobPhase.Delivery
+    };
+
     /// <summary>
     /// How many days the job spent in a phase, or null if it hasn't completed that phase yet (or
     /// skipped it, spending no days there) and so has no finished length to report.
@@ -178,7 +187,7 @@ public static class JobPhases
         }
 
         var start = job.StartDate.Date;
-        var end = (job.Completed ? job.EndDate.Date : Max(today.Date, start)).AddDays(1);
+        var end = (job.Completed ? job.EndDate.Date : DateMath.Max(today.Date, start)).AddDays(1);
 
         var seam1 = end;
         var seam2 = end;
@@ -188,8 +197,8 @@ public static class JobPhases
             seam2 = job.Phase == JobPhase.Delivery ? job.DeliveryStartDate?.Date ?? seam1 : end;
         }
 
-        seam1 = Clamp(seam1, start, end);
-        seam2 = Clamp(seam2, seam1, end);
+        seam1 = DateMath.Clamp(seam1, start, end);
+        seam2 = DateMath.Clamp(seam2, seam1, end);
 
         var segments = new List<PhaseSegment>(3);
         AddIfNotEmpty(segments, JobPhase.Design, start, seam1);
@@ -206,8 +215,4 @@ public static class JobPhases
         }
     }
 
-    private static DateTime Max(DateTime a, DateTime b) => a > b ? a : b;
-
-    private static DateTime Clamp(DateTime value, DateTime min, DateTime max) =>
-        value < min ? min : value > max ? max : value;
 }

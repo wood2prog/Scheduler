@@ -36,18 +36,5 @@ internal static class TestJobs
         PinEndToToday = pinEnd
     };
 
-    public static Job Clone(Job job) => new()
-    {
-        Id = job.Id,
-        Name = job.Name,
-        StartDate = job.StartDate,
-        EndDate = job.EndDate,
-        Completed = job.Completed,
-        PinStartToToday = job.PinStartToToday,
-        PinEndToToday = job.PinEndToToday,
-        Phase = job.Phase,
-        ConstructionStartDate = job.ConstructionStartDate,
-        DeliveryStartDate = job.DeliveryStartDate,
-        DeliveryTargetDate = job.DeliveryTargetDate
-    };
+    public static Job Clone(Job job) => job.Clone();
 }

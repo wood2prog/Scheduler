@@ -221,7 +221,7 @@ public sealed class GanttChartPanel : Panel
             // Snap to the nearest day boundary under the pointer.
             int dayBoundary = (int)Math.Round((e.X - (NameColumnWidth - _hScrollBar.Value)) / (double)DayWidth);
             var date = _rangeStart.AddDays(dayBoundary);
-            _dragDate = date < drag.Min ? drag.Min : date > drag.Max ? drag.Max : date;
+            _dragDate = DateMath.Clamp(date, drag.Min, drag.Max);
             Invalidate();
             return;
         }
@@ -307,13 +307,17 @@ public sealed class GanttChartPanel : Panel
         int viewportWidth = Math.Max(1, ClientSize.Width - NameColumnWidth - _vScrollBar.Width);
         int viewportHeight = Math.Max(1, ClientSize.Height - HeaderHeight - _hScrollBar.Height);
 
-        _hScrollBar.Value = 0;
-        _hScrollBar.Maximum = Math.Max(0, contentWidth - 1);
-        _hScrollBar.LargeChange = Math.Max(1, Math.Min(viewportWidth, contentWidth));
+        // Keep the user's place (e.g. while the window is resized), clamped to the new range.
+        SetScrollRange(_hScrollBar, contentWidth, viewportWidth);
+        SetScrollRange(_vScrollBar, contentHeight, viewportHeight);
+    }
 
-        _vScrollBar.Value = 0;
-        _vScrollBar.Maximum = Math.Max(0, contentHeight - 1);
-        _vScrollBar.LargeChange = Math.Max(1, Math.Min(viewportHeight, contentHeight));
+    private static void SetScrollRange(ScrollBar bar, int contentSize, int viewportSize)
+    {
+        int previous = bar.Value;
+        bar.Maximum = Math.Max(0, contentSize - 1);
+        bar.LargeChange = Math.Max(1, Math.Min(viewportSize, contentSize));
+        bar.Value = Math.Clamp(previous, bar.Minimum, Math.Max(bar.Minimum, bar.Maximum - bar.LargeChange + 1));
     }
 
     // NOTE: text is drawn with TextRenderer (GDI), which does not reliably honor a
@@ -388,6 +392,7 @@ public sealed class GanttChartPanel : Panel
         int gridWidth = _totalDays * DayWidth;
         int gridHeight = _jobs.Count * RowHeight;
         var today = DateTime.Today;
+        using var gridPen = new Pen(GridLineColor);
 
         for (int d = 0; d < _totalDays; d++)
         {
@@ -413,7 +418,7 @@ public sealed class GanttChartPanel : Panel
                 using var rowBrush = new SolidBrush(RowAltColor);
                 g.FillRectangle(rowBrush, dx, y, gridWidth, RowHeight);
             }
-            g.DrawLine(new Pen(GridLineColor), dx, y + RowHeight, dx + gridWidth, y + RowHeight);
+            g.DrawLine(gridPen, dx, y + RowHeight, dx + gridWidth, y + RowHeight);
 
             var job = _jobs[i];
             if (job.Phase is null)
@@ -482,7 +487,7 @@ public sealed class GanttChartPanel : Panel
             var overdueStart = segment.EndExclusive;
             if (segment.Phase == JobPhase.Delivery && job.DeliveryTargetDate is { } target)
             {
-                overdueStart = Max(segment.Start, target.Date.AddDays(1));
+                overdueStart = DateMath.Max(segment.Start, target.Date.AddDays(1));
                 overdueStart = overdueStart > segment.EndExclusive ? segment.EndExclusive : overdueStart;
             }
 
@@ -547,8 +552,6 @@ public sealed class GanttChartPanel : Panel
         color.R + (255 - color.R) * 55 / 100,
         color.G + (255 - color.G) * 55 / 100,
         color.B + (255 - color.B) * 55 / 100);
-
-    private static DateTime Max(DateTime a, DateTime b) => a > b ? a : b;
 
     private void DrawHeader(Graphics g, int dx)
     {

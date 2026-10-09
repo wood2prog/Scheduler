@@ -2,13 +2,11 @@ namespace Scheduler.UI;
 
 /// <summary>
 /// Persists the main window's position and size between runs as a plain
-/// "X,Y,Width,Height" line in the per-user data folder (Program Files may be
-/// read-only once installed).
+/// "X,Y,Width,Height" line in the per-user data folder.
 /// </summary>
 internal static class WindowSettings
 {
-    private static string FilePath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Scheduler", "window.settings");
+    private static string FilePath => Path.Combine(AppPaths.DataDirectory, "window.settings");
 
     public static Rectangle? Load()
     {
@@ -27,7 +25,9 @@ internal static class WindowSettings
             return null;
         }
 
-        return new Rectangle(x, y, width, height);
+        // Ignore a saved position that is no longer on any screen (e.g. a disconnected monitor).
+        var bounds = new Rectangle(x, y, width, height);
+        return Screen.AllScreens.Any(s => s.WorkingArea.IntersectsWith(bounds)) ? bounds : null;
     }
 
     public static void Save(Rectangle bounds)

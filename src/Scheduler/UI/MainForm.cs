@@ -33,8 +33,8 @@ public sealed class MainForm : Form
     private readonly DateTimePicker _deliveryTargetPicker;
 
     // The job being edited (null when adding). All form fields work on _draft, a copy, so that
-    // changing the phase can restamp dates and the form simply reloads from it. Saving copies
-    // the draft back to _editingJob (or adds it as a new job).
+    // changing the phase can restamp dates and the form simply reloads from it. Saving stores the
+    // draft, updating the job being edited or adding a new one.
     private Job? _editingJob;
     private Job _draft = new();
     private bool _loading;
@@ -248,10 +248,9 @@ public sealed class MainForm : Form
             return;
         }
 
-        if (_editingJob is { } job)
+        if (_editingJob is not null)
         {
-            CopyJob(_draft, job);
-            _jobService.UpdateJob(job);
+            _jobService.UpdateJob(_draft);
         }
         else
         {
@@ -319,8 +318,7 @@ public sealed class MainForm : Form
     private void BeginEdit(Job job)
     {
         _editingJob = job;
-        _draft = new Job();
-        CopyJob(job, _draft);
+        _draft = job.Clone();
         LoadDraftIntoControls();
         _saveButton.Text = "Save";
         _cancelButton.Enabled = true;
@@ -342,21 +340,6 @@ public sealed class MainForm : Form
         var today = DateTime.Today;
         _draft = new Job { Phase = JobPhase.Prospect, StartDate = today, EndDate = today };
         LoadDraftIntoControls();
-    }
-
-    private static void CopyJob(Job from, Job to)
-    {
-        to.Id = from.Id;
-        to.Name = from.Name;
-        to.StartDate = from.StartDate;
-        to.EndDate = from.EndDate;
-        to.Completed = from.Completed;
-        to.PinStartToToday = from.PinStartToToday;
-        to.PinEndToToday = from.PinEndToToday;
-        to.Phase = from.Phase;
-        to.ConstructionStartDate = from.ConstructionStartDate;
-        to.DeliveryStartDate = from.DeliveryStartDate;
-        to.DeliveryTargetDate = from.DeliveryTargetDate;
     }
 
     private void StageComboBox_SelectedIndexChanged(object? sender, EventArgs e)

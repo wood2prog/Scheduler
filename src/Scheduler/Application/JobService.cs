@@ -49,7 +49,7 @@ public sealed class JobService
         var sorted = sortOrder switch
         {
             JobSortOrder.EndDate => scheduled.OrderBy(j => j.EndDate),
-            JobSortOrder.Name => scheduled.OrderBy(j => j.Name),
+            JobSortOrder.Name => scheduled.OrderBy(j => j.Name, StringComparer.CurrentCultureIgnoreCase),
             _ => scheduled.OrderBy(j => j.StartDate)
         };
 

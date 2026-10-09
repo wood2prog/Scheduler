@@ -31,4 +31,7 @@ public sealed class Job
     public DateTime? DeliveryStartDate { get; set; }
 
     public DateTime? DeliveryTargetDate { get; set; }
+
+    /// <summary>An independent copy. Every field is a value type or string, so a shallow copy is complete, including fields added later.</summary>
+    public Job Clone() => (Job)MemberwiseClone();
 }
