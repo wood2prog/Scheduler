@@ -24,7 +24,7 @@ Single project (`src/Scheduler/Scheduler.csproj`, target `net9.0-windows`) organ
 
 Dependency direction: `UI -> Application -> Domain`, and `Data -> Application -> Domain`. `Domain` and `Application` have no dependency on `Data` or `UI`.
 
-- **Domain/** (`Scheduler.Domain`) — `Job.cs`: the plain data class (Id, Name, StartDate, EndDate). No behavior, no dependencies on other layers.
+- **Domain/** (`Scheduler.Domain`) — `Job.cs`: the plain data class (Id, Name, StartDate, EndDate, Completed, pin flags, and the optional phase fields Phase/ConstructionStartDate/DeliveryStartDate/DeliveryTargetDate — see `docs/phases-plan.md`). No behavior, no dependencies on other layers.
 - **Application/** (`Scheduler.Application`) — `IJobRepository.cs` (persistence abstraction) and `JobService.cs` (sorting/orchestration logic, `JobSortOrder` enum). The UI and Data layers both depend on this layer; it depends on nothing else in the app.
 - **Data/** (`Scheduler.Data`) — `SqliteJobRepository.cs`: the only SQLite-aware code. Implements `IJobRepository` using `Microsoft.Data.Sqlite` directly (no ORM). Creates the `Jobs` table on first connection if it doesn't exist (`CREATE TABLE IF NOT EXISTS`). Dates are stored as ISO 8601 strings (`DateTime.ToString("O")`).
 - **UI/** (`Scheduler.UI`) — `MainForm.cs`: a single WinForms `Form` built entirely in code (no `.Designer.cs` partial split — controls are constructed directly in the constructor). Takes a `JobService` via constructor injection.
