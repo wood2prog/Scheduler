@@ -92,8 +92,35 @@ public sealed class MainForm : Form
         Controls.Add(_ganttChartPanel);
         Controls.Add(toolbar);
         Controls.Add(_editor);
+        AddAboutButton();
 
         Load += (_, _) => RefreshJobList();
+    }
+
+    // A small logo button in the top-right corner, floating over the editor's (short) name row.
+    private void AddAboutButton()
+    {
+        const int size = 28;
+        var button = new Button
+        {
+            Image = AppLogo.Load(size - 8),
+            Size = new Size(size, size),
+            FlatStyle = FlatStyle.Flat,
+            Cursor = Cursors.Hand,
+            Anchor = AnchorStyles.Top | AnchorStyles.Right,
+            Location = new Point(ClientSize.Width - size - 8, 8),
+            TabStop = false
+        };
+        button.FlatAppearance.BorderSize = 0;
+        button.Click += (_, _) =>
+        {
+            using var about = new AboutForm();
+            about.ShowDialog(this);
+        };
+        new ToolTip().SetToolTip(button, "About Scheduler");
+
+        Controls.Add(button);
+        Controls.SetChildIndex(button, 0);
     }
 
     protected override void OnFormClosing(FormClosingEventArgs e)

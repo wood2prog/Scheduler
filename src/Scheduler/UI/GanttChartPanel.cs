@@ -67,7 +67,7 @@ public sealed class GanttChartPanel : Panel
     private DateTime _dragDate;
     private bool _suppressClick;
 
-    private GanttLayout Layout => new(_rangeStart, _hScrollBar.Value, _vScrollBar.Value,
+    private GanttLayout CurrentLayout => new(_rangeStart, _hScrollBar.Value, _vScrollBar.Value,
         ClientSize, _vScrollBar.Width, _hScrollBar.Height, _jobs.Count);
 
     public GanttChartPanel()
@@ -220,7 +220,7 @@ public sealed class GanttChartPanel : Panel
         if (_dragSeam is { } drag)
         {
             // Snap to the nearest day boundary under the pointer.
-            _dragDate = DateMath.Clamp(Layout.SnapToDay(e.X), drag.Min, drag.Max);
+            _dragDate = DateMath.Clamp(CurrentLayout.SnapToDay(e.X), drag.Min, drag.Max);
             Invalidate();
             return;
         }
@@ -249,7 +249,7 @@ public sealed class GanttChartPanel : Panel
 
     private SeamHit? GetSeamAt(Point location)
     {
-        var layout = Layout;
+        var layout = CurrentLayout;
         if (layout.RowAt(location, gridOnly: true) is not { } rowIndex || _jobs[rowIndex].Phase is null)
         {
             return null;
@@ -266,7 +266,7 @@ public sealed class GanttChartPanel : Panel
     }
 
     private Job? GetJobAt(Point location) =>
-        Layout.RowAt(location) is { } row ? _jobs[row] : null;
+        CurrentLayout.RowAt(location) is { } row ? _jobs[row] : null;
 
     private void UpdateScrollBars()
     {
@@ -342,7 +342,7 @@ public sealed class GanttChartPanel : Panel
             return;
         }
 
-        int x = Layout.DayToX(_dragDate);
+        int x = CurrentLayout.DayToX(_dragDate);
         using var pen = new Pen(Color.FromArgb(60, 60, 60), 1.5f) { DashStyle = DashStyle.Dash };
         g.DrawLine(pen, x, bodyTop, x, bodyTop + bodyHeight);
 
