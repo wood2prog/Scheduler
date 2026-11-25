@@ -27,6 +27,9 @@ internal static class ComboBoxExtensions
     {
         var index = comboBox.Items.Cast<ComboOption<T>>().ToList()
             .FindIndex(o => EqualityComparer<T>.Default.Equals(o.Value, value));
-        comboBox.SelectedIndex = index;
+        if (index >= 0)
+        {
+            comboBox.SelectedIndex = index;
+        }
     }
 }

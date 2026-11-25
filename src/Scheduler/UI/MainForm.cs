@@ -55,9 +55,18 @@ public sealed class MainForm : Form
             new ComboOption<JobSortOrder>("Start Date", JobSortOrder.StartDate),
             new ComboOption<JobSortOrder>("End Date", JobSortOrder.EndDate),
             new ComboOption<JobSortOrder>("Name", JobSortOrder.Name));
+
+        var viewSettings = ViewSettings.Load(ViewSettingsPath);
+        _sortComboBox.SelectValue(viewSettings.SortOrder);
         _sortComboBox.SelectedIndexChanged += (_, _) => RefreshJobList();
 
-        _hideCompletedCheckBox = new CheckBox { Text = "Hide completed", AutoSize = true, Margin = new Padding(15, 6, 3, 3) };
+        _hideCompletedCheckBox = new CheckBox
+        {
+            Text = "Hide completed",
+            AutoSize = true,
+            Margin = new Padding(15, 6, 3, 3),
+            Checked = viewSettings.HideCompleted
+        };
         _hideCompletedCheckBox.CheckedChanged += (_, _) => RefreshJobList();
 
         _reportComboBox = new ComboBox
@@ -127,7 +136,11 @@ public sealed class MainForm : Form
     {
         base.OnFormClosing(e);
         WindowSettings.Save(WindowState == FormWindowState.Normal ? Bounds : RestoreBounds);
+        new ViewSettings(_sortComboBox.GetSelectedValue<JobSortOrder>(), _hideCompletedCheckBox.Checked)
+            .TrySave(ViewSettingsPath);
     }
+
+    private static string ViewSettingsPath => Path.Combine(AppPaths.DataDirectory, "ui.settings");
 
     private void GenerateReportButton_Click(object? sender, EventArgs e)
     {
